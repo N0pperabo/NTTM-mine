@@ -154,14 +154,18 @@ class GitHubTransport:
                     error_message=f"خطا در ارسال فایل درخواست به گیت‌هاب: {upload_err}",
                 )
 
-            # 4. Trigger workflow dispatch
-            update_status("در حال ارسال سیگنال اجرای رانر (workflow_dispatch)...")
-            dispatch_success, dispatch_err = self._trigger_workflow(request_id)
-            if not dispatch_success:
-                return FetchResult(
-                    success=False,
-                    error_message=f"خطا در اجرای اکشن گیت‌هاب: {dispatch_err}",
-                )
+            # 4. Check if Daemon is active or trigger fetcher workflow
+            daemon_active = self.is_daemon_alive()
+            if daemon_active:
+                update_status("⚡ رانر فعال دائمی (Daemon) آنلاین است! پردازش فوق سریع بدون نیاز به بوت رانر...")
+            else:
+                update_status("در حال ارسال سیگنال اجرای رانر مجزا (workflow_dispatch)...")
+                dispatch_success, dispatch_err = self._trigger_workflow(request_id)
+                if not dispatch_success:
+                    return FetchResult(
+                        success=False,
+                        error_message=f"خطا در اجرای اکشن گیت‌هاب: {dispatch_err}",
+                    )
 
             # 5. Poll for release res-{request_id}
             update_status("در انتظار شروع و اتمام پردازش رانر در گیت‌هاب...")
@@ -350,6 +354,87 @@ class GitHubTransport:
             if resp.status_code in (200, 204):
                 return True, ""
             return False, f"HTTP {resp.status_code}: {resp.text}"
+        except Exception as e:
+            return False, str(e)
+
+    def is_daemon_alive(self) -> bool:
+        """Checks if a daemon worker workflow is currently active or queued."""
+        if not self.config.is_configured():
+            return False
+        try:
+            owner, repo = self._parse_repo()
+            url = f"{self.api_base}/repos/{owner}/{repo}/actions/workflows/daemon.yml/runs"
+            resp = requests.get(
+                url,
+                headers=self._get_headers(),
+                params={"status": "in_progress", "per_page": 5},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("total_count", 0) > 0:
+                    return True
+
+            resp_queued = requests.get(
+                url,
+                headers=self._get_headers(),
+                params={"status": "queued", "per_page": 5},
+                timeout=10,
+            )
+            if resp_queued.status_code == 200:
+                data_q = resp_queued.json()
+                if data_q.get("total_count", 0) > 0:
+                    return True
+
+            return False
+        except Exception as e:
+            logger.debug(f"is_daemon_alive check error: {e}")
+            return False
+
+    def start_daemon(self, idle_timeout_min: int = 30) -> Tuple[bool, str]:
+        """Dispatches daemon.yml workflow to start persistent worker."""
+        if not self.config.is_configured():
+            return False, "تنظیمات گیت‌هاب کامل نیست."
+        try:
+            owner, repo = self._parse_repo()
+            url = f"{self.api_base}/repos/{owner}/{repo}/actions/workflows/daemon.yml/dispatches"
+            payload = {
+                "ref": self.config.branch or "main",
+                "inputs": {
+                    "idle_timeout_minutes": str(idle_timeout_min),
+                    "max_hours": "5.5",
+                    "auto_chain": "true",
+                },
+            }
+            resp = requests.post(url, headers=self._get_headers(), json=payload, timeout=20)
+            if resp.status_code in (200, 204):
+                return True, "دستور اجرای رانر دائمی ارسال شد."
+            return False, f"HTTP {resp.status_code}: {resp.text}"
+        except Exception as e:
+            return False, str(e)
+
+    def stop_daemon(self) -> Tuple[bool, str]:
+        """Cancels any running daemon.yml workflow runs."""
+        if not self.config.is_configured():
+            return False, "تنظیمات گیت‌هاب کامل نیست."
+        try:
+            owner, repo = self._parse_repo()
+            url = f"{self.api_base}/repos/{owner}/{repo}/actions/workflows/daemon.yml/runs"
+            resp = requests.get(
+                url,
+                headers=self._get_headers(),
+                params={"status": "in_progress", "per_page": 10},
+                timeout=10,
+            )
+            cancelled_count = 0
+            if resp.status_code == 200:
+                for run in resp.json().get("workflow_runs", []):
+                    run_id = run.get("id")
+                    cancel_url = f"{self.api_base}/repos/{owner}/{repo}/actions/runs/{run_id}/cancel"
+                    c_resp = requests.post(cancel_url, headers=self._get_headers(), timeout=10)
+                    if c_resp.status_code in (200, 202):
+                        cancelled_count += 1
+            return True, f"تعداد {cancelled_count} رانر متوقف شد."
         except Exception as e:
             return False, str(e)
 

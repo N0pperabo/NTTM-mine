@@ -1,0 +1,58 @@
+name: GitHub Offline Browser Daemon Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      idle_timeout_minutes:
+        description: 'Minutes of inactivity before auto-sleep (to save free quota)'
+        required: false
+        default: '30'
+        type: string
+      max_hours:
+        description: 'Maximum hours to run before handoff (max 5.8)'
+        required: false
+        default: '5.5'
+        type: string
+      auto_chain:
+        description: 'Auto-spawn next worker before expiration'
+        required: false
+        default: 'true'
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  daemon-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system dependencies & Playwright (One-Time Setup)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip coreutils
+          npm init -y
+          npm install playwright single-file-cli
+          npx playwright install --with-deps chromium
+
+      - name: Run Daemon Polling Worker
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          IDLE_TIMEOUT_MINUTES: ${{ inputs.idle_timeout_minutes || '30' }}
+          MAX_HOURS: ${{ inputs.max_hours || '5.5' }}
+          AUTO_CHAIN: ${{ inputs.auto_chain || 'true' }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          node scripts/daemon_runner.mjs

@@ -424,6 +424,39 @@ class OfflineBrowserUI:
     .mode-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
     .mode-toggle.batch .mode-dot { background: var(--warning); }
 
+    /* Daemon Fast Mode Toggle */
+    .daemon-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-dark);
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 13px;
+      user-select: none;
+      transition: all 0.2s;
+    }
+    .daemon-btn.active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: var(--success);
+      color: #34d399;
+    }
+    .daemon-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #64748b;
+      transition: background 0.3s;
+    }
+    .daemon-btn.active .daemon-dot {
+      background: var(--success);
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
     /* Quick Action Buttons */
     .action-btn {
       background: var(--bg-dark);
@@ -591,6 +624,12 @@ class OfflineBrowserUI:
       <span id="mode-label">حالت مستقیم</span>
     </div>
 
+    <!-- Daemon Fast Mode Toggle Button -->
+    <div id="daemon-btn" class="daemon-btn" onclick="window.shellApp.toggleDaemon()" title="کلیک برای روشن/خاموش کردن رانر دائمی (پاسخ فوق سریع ۲-۵ ثانیه‌ای)">
+      <div class="daemon-dot"></div>
+      <span id="daemon-label">⚡ رانر زنده: در حال بررسی...</span>
+    </div>
+
     <button class="action-btn" title="پوشه فایل‌های دانلود شده" onclick="window.pywebview.api.open_downloads_folder()">📁 دانلودها</button>
     <button class="action-btn" title="پاکسازی کوکی‌ها و سشن ذخیره شده" onclick="window.pywebview.api.clear_session()">🧹 پاکسازی نشست</button>
     <button class="action-btn" title="تنظیمات مخزن و توکن گیت‌هاب" onclick="window.shellApp.openSettings()">⚙️ تنظیمات</button>
@@ -681,6 +720,41 @@ class OfflineBrowserUI:
         this.frame.addEventListener('load', () => {
           this.injectDeepInterceptor();
         });
+
+        // Check daemon worker status periodically
+        setTimeout(() => this.pollDaemonStatus(), 1000);
+        setInterval(() => this.pollDaemonStatus(), 12000);
+      }
+
+      pollDaemonStatus() {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_daemon_status) {
+          window.pywebview.api.get_daemon_status().then((res) => {
+            this.updateDaemonUI(res.alive);
+          }).catch(() => {});
+        }
+      }
+
+      toggleDaemon() {
+        this.showToast('در حال ارسال دستور تغییر وضعیت رانر زنده...');
+        window.pywebview.api.toggle_daemon().then((res) => {
+          this.updateDaemonUI(res.alive);
+          this.showToast(res.msg);
+        }).catch((e) => {
+          this.showToast('خطا در ارتباط با رانر زنده: ' + e, true);
+        });
+      }
+
+      updateDaemonUI(isAlive) {
+        const btn = document.getElementById('daemon-btn');
+        const label = document.getElementById('daemon-label');
+        if (!btn || !label) return;
+        if (isAlive) {
+          btn.classList.add('active');
+          label.textContent = '⚡ رانر زنده: روشن (Ultra Fast)';
+        } else {
+          btn.classList.remove('active');
+          label.textContent = '⚡ رانر زنده: خاموش';
+        }
       }
 
       onGoClick() {
@@ -1182,6 +1256,19 @@ class WebviewApiBridge:
 
     def get_config(self) -> Dict[str, Any]:
         return self.ui.config.to_dict()
+
+    def get_daemon_status(self) -> Dict[str, Any]:
+        alive = self.ui.transport.is_daemon_alive()
+        return {"alive": alive}
+
+    def toggle_daemon(self) -> Dict[str, Any]:
+        alive = self.ui.transport.is_daemon_alive()
+        if alive:
+            ok, msg = self.ui.transport.stop_daemon()
+            return {"alive": False, "msg": "رانر زنده متوقف شد."}
+        else:
+            ok, msg = self.ui.transport.start_daemon(idle_timeout_min=30)
+            return {"alive": True, "msg": "درخواست راه‌اندازی رانر زنده ارسال شد. ظرف ۳۰ الی ۴۵ ثانیه آماده می‌شود..."}
 
     def save_config(
         self, token: str, repo: str, branch: str, search_url: str
