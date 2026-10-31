@@ -65,7 +65,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header(
                     "Content-Security-Policy",
-                    "default-src 'self' 'unsafe-inline' data: blob: http://127.0.0.1:*; connect-src 'none'; form-action 'none';",
+                    "default-src 'self' 'unsafe-inline' data: blob: http://127.0.0.1:*; img-src 'self' data: blob: http://127.0.0.1:*; style-src 'self' 'unsafe-inline' data:; font-src 'self' data:; connect-src 'none'; form-action 'none';",
                 )
                 self.end_headers()
                 with open(file_path, "rb") as f:

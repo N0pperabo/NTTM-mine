@@ -100,7 +100,7 @@ async function main() {
 
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security']
     });
 
     const contextOptions = {
@@ -144,8 +144,9 @@ async function main() {
 
     const page = await context.newPage();
 
-    // Cache all loaded image buffers to embed into offline HTML (for comic covers, avatars, etc.)
+    // Cache all loaded image buffers and CSS stylesheets to embed into offline HTML
     const imageMap = new Map();
+    const cssMap = new Map();
     page.on('response', async (res) => {
       try {
         const url = res.url();
@@ -154,6 +155,11 @@ async function main() {
           const buffer = await res.body();
           if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
             imageMap.set(url, `data:${ct};base64,${buffer.toString('base64')}`);
+          }
+        } else if (ct.includes('text/css') || url.endsWith('.css') || url.includes('.css?')) {
+          const text = await res.text();
+          if (text) {
+            cssMap.set(url, text);
           }
         }
       } catch (e) {}
@@ -371,7 +377,7 @@ async function main() {
     // Save webpage if not a file download
     if (!downloadedFile) {
       console.log('[Runner] Serializing rendered DOM snapshot...');
-      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap);
+      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
@@ -479,11 +485,46 @@ async function executeAjaxFallback(page, ajax) {
 }
 
 // DOM Serializer strictly preserving inputs, buttons, selects, forms and data-* attributes
-async function serializeRenderedPage(page, baseUrl, imageMap) {
-  const imagesList = Array.from(imageMap.entries());
-  return await page.evaluate(({ base, images }) => {
+async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap = new Map()) {
+  const imagesList = imageMap ? Array.from(imageMap.entries()) : [];
+  const cssList = cssMap ? Array.from(cssMap.entries()) : [];
+  return await page.evaluate(async ({ base, images, cssItems }) => {
     try {
-      const imgLookup = new Map(images);
+      const imgLookup = new Map(images || []);
+      const cssLookup = new Map(cssItems || []);
+
+      // 1. Inline all external stylesheets (<link rel="stylesheet">) into <style> tags
+      const linkElements = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[as="style"]'));
+      for (const link of linkElements) {
+        try {
+          const href = link.href;
+          if (!href) continue;
+          let css = cssLookup.get(href) || '';
+          if (!css) {
+            for (const sheet of document.styleSheets) {
+              try {
+                if (sheet.href === href) {
+                  const rules = Array.from(sheet.cssRules || []);
+                  css = rules.map((r) => r.cssText).join('\n');
+                  break;
+                }
+              } catch (e) {}
+            }
+          }
+          if (!css) {
+            try {
+              const res = await fetch(href);
+              if (res.ok) css = await res.text();
+            } catch (e) {}
+          }
+          if (css) {
+            const style = document.createElement('style');
+            style.setAttribute('data-inlined-from', href);
+            style.textContent = css;
+            link.replaceWith(style);
+          }
+        } catch (e) {}
+      }
 
       // Unpack lazy loading data attributes (e.g. on comic/manga/media websites)
       document.querySelectorAll('img, picture source').forEach((el) => {
@@ -582,7 +623,7 @@ async function serializeRenderedPage(page, baseUrl, imageMap) {
     } catch (e) {
       return document.documentElement.outerHTML;
     }
-  }, { base: baseUrl, images: imagesList });
+  }, { base: baseUrl, images: imagesList, cssItems: cssList });
 }
 
 // Check for common binary/download MIME types
