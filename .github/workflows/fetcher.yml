@@ -28,19 +28,19 @@ jobs:
       - name: Install system dependencies & Playwright
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip coreutils xvfb
+          sudo apt-get install -y zip coreutils
           npm init -y
           npm install playwright single-file-cli
           npx playwright install --with-deps chromium
 
-      - name: Execute Remote Playwright Runner (Virtual Headful Display)
+      - name: Execute Remote Playwright Runner
         env:
           REQUEST_ID: ${{ inputs.request_id }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" node scripts/remote_runner.mjs "${{ inputs.request_id }}"
+          node scripts/remote_runner.mjs "${{ inputs.request_id }}"
 
       - name: Remove processed request envelope
         run: |

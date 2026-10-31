@@ -1,8 +1,165 @@
 
-// Cloudflare Challenge / Turnstile Automatic Detector & Solver (DISABLED per user request in favor of NopeCHA extension)
+// Cloudflare Challenge / Turnstile Automatic Detector & Solver
 async function handleCloudflareChallenge(page) {
-  // Disabled: NopeCHA browser extension handles captchas and Turnstile automatically
-  return false;
+  try {
+    const isChallengeActive = async () => {
+      const title = (await page.title().catch(() => '')).toLowerCase();
+      const isCfTitle =
+        title.includes('just a moment') ||
+        title.includes('checking your browser') ||
+        title.includes('attention required') ||
+        title.includes('ddos-guard') ||
+        title.includes('security check') ||
+        title.includes('چند لحظه صبر کنید') ||
+        title.includes('یک لحظه صبر کنید') ||
+        title.includes('در حال بررسی') ||
+        title.includes('لطفا صبر کنید') ||
+        title.includes('تایید امنیتی');
+
+      const hasCfDom = await page.evaluate(() => {
+        try {
+          const text = (document.body ? document.body.innerText : '') || '';
+          return !!(
+            document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+            document.querySelector('iframe[src*="challenge-platform"]') ||
+            document.querySelector('#challenge-stage') ||
+            document.querySelector('#challenge-running') ||
+            document.querySelector('#challenge-form') ||
+            document.querySelector('.cf-turnstile') ||
+            document.querySelector('#turnstile-wrapper') ||
+            document.querySelector('input[name="cf-turnstile-response"]') ||
+            window._cf_chl_opt ||
+            text.includes('Verify you are human') ||
+            text.includes('Checking if the site connection is secure') ||
+            text.includes('در حال انجام تایید امنیتی')
+          );
+        } catch (e) {
+          return false;
+        }
+      }).catch(() => false);
+
+      return isCfTitle || hasCfDom;
+    };
+
+    if (!(await isChallengeActive())) {
+      return false; // Not a Cloudflare challenge
+    }
+
+    console.log('[Cloudflare] 🛡️ Cloudflare Challenge / Turnstile detected!');
+    console.log('[Cloudflare] ⏳ Waiting up to 15 seconds for Turnstile widget & iframe to render...');
+
+    // 1. Wait up to 15s for the challenge iframe or widget container to appear
+    const iframeLocator = page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"], #challenge-stage iframe, #bcQj6 iframe').first();
+    let iframeVisible = false;
+    try {
+      await iframeLocator.waitFor({ state: 'visible', timeout: 15000 });
+      iframeVisible = true;
+      console.log('[Cloudflare] Turnstile challenge iframe is now visible.');
+    } catch (e) {
+      console.log('[Cloudflare] Visible iframe wait timed out. Checking widget elements...');
+    }
+
+    // 2. Human-like pause for telemetry and challenge rendering
+    await page.waitForTimeout(2500);
+
+    // 3. Click the Turnstile checkbox
+    let clicked = false;
+    try {
+      const cfFrame = page.frameLocator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"], #bcQj6 iframe').first();
+      const checkbox = cfFrame.locator('input[type="checkbox"], .ctp-checkbox-label, label, #challenge-stage, body').first();
+      if ((await checkbox.count()) > 0) {
+        const box = await checkbox.boundingBox();
+        if (box && box.width > 0 && box.height > 0) {
+          const clickX = box.x + Math.min(30, box.width / 2);
+          const clickY = box.y + box.height / 2;
+          console.log(`[Cloudflare] 🖱️ Moving mouse to inner checkbox: x=${clickX}, y=${clickY}`);
+          await page.mouse.move(clickX, clickY, { steps: 25 });
+          await page.waitForTimeout(300);
+          await page.mouse.down();
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+          clicked = true;
+          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy A (Frame Locator).');
+        }
+      }
+    } catch (errA) {}
+
+    if (!clicked && iframeVisible) {
+      try {
+        const box = await iframeLocator.boundingBox();
+        if (box) {
+          const targetX = box.x + 30;
+          const targetY = box.y + box.height / 2;
+          console.log(`[Cloudflare] 🖱️ Moving mouse to iframe bounding box: x=${targetX}, y=${targetY}`);
+          await page.mouse.move(targetX, targetY, { steps: 25 });
+          await page.waitForTimeout(300);
+          await page.mouse.down();
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+          clicked = true;
+          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy B (Iframe Coordinates).');
+        }
+      } catch (errB) {}
+    }
+
+    console.log('[Cloudflare] ⏳ Waiting up to 35 seconds for token generation and redirect to destination site...');
+
+    // 4. Wait for clearance and redirect (up to 35 seconds)
+    const waitStartTime = Date.now();
+    while (Date.now() - waitStartTime < 35000) {
+      await page.waitForTimeout(1000);
+
+      // Check if title is now a real site title (not challenge)
+      const currentTitle = (await page.title().catch(() => '')).toLowerCase();
+      const stillInCfTitle =
+        currentTitle.includes('just a moment') ||
+        currentTitle.includes('checking your browser') ||
+        currentTitle.includes('attention required') ||
+        currentTitle.includes('security check') ||
+        currentTitle.includes('ddos-guard') ||
+        currentTitle.includes('چند لحظه صبر کنید') ||
+        currentTitle.includes('یک لحظه صبر کنید') ||
+        currentTitle.includes('در حال بررسی') ||
+        currentTitle.includes('لطفا صبر کنید') ||
+        currentTitle.includes('تایید امنیتی');
+
+      // Check if token was solved or cookie is set
+      const isTokenSolved = await page.evaluate(() => {
+        try {
+          const input = document.querySelector('input[name="cf-turnstile-response"]');
+          const hasToken = !!(input && input.value && input.value.trim().length > 10);
+          const hasCookie = document.cookie.includes('cf_clearance');
+          return hasToken || hasCookie;
+        } catch (e) {
+          return false;
+        }
+      }).catch(() => false);
+
+      if (!stillInCfTitle) {
+        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loaded: "${await page.title().catch(() => '')}"`);
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(2000);
+        return true;
+      }
+
+      if (isTokenSolved) {
+        console.log('[Cloudflare] 🔑 Token solved / clearance cookie acquired! Waiting for redirect to settle...');
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(2000);
+        console.log(`[Cloudflare] 🎉 Post-redirect title: "${await page.title().catch(() => '')}"`);
+        return true;
+      }
+    }
+
+    console.log('[Cloudflare] ⚠️ Verification wait period ended. Current title:', await page.title().catch(() => ''));
+    return false;
+  } catch (err) {
+    console.warn('[Cloudflare] Solver exception:', err.message);
+    return false;
+  }
 }
 
 // Auto-scroll page smoothly to trigger lazy-loaded images (e.g. comic covers, movie posters, video thumbs)
@@ -162,7 +319,25 @@ async function main() {
     process.exit(1);
   }
 
-  console.log('[Daemon] Playwright Chromium initialized.');
+  console.log('[Daemon] Initializing persistent hot Chromium browser...');
+  const browser = await chromium.launch({
+    headless: true,
+    ignoreDefaultArgs: ['--enable-automation'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--window-size=1920,1080',
+      '--start-maximized',
+      '--lang=en-US,en'
+    ]
+  });
+  console.log('[Daemon] 🚀 Hot Playwright Chromium browser online and ready!');
 
   try {
     while (true) {
@@ -230,7 +405,7 @@ async function main() {
         fs.mkdirSync(workDir, { recursive: true });
 
         try {
-          await processRequest(chromium, requestData, requestId, workDir);
+          await processRequest(browser, requestData, requestId, workDir);
           await packageAndRelease(requestId, workDir);
         } catch (procErr) {
           console.error(`[Daemon] Processing error:`, procErr);
@@ -260,11 +435,13 @@ async function main() {
     }
   } finally {
     console.log('[Daemon] Closing browser and exiting worker.');
-    // browser closed per request
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }
 
-async function processRequest(chromium, requestData, requestId, workDir) {
+async function processRequest(browser, requestData, requestId, workDir) {
   const downloadDir = path.join(workDir, 'download');
   fs.mkdirSync(downloadDir, { recursive: true });
 
@@ -283,23 +460,7 @@ async function processRequest(chromium, requestData, requestId, workDir) {
     custom_delay_seconds = 0
   } = requestData;
 
-  const userDataDir = path.join(workDir, 'browser_profile');
-  fs.mkdirSync(userDataDir, { recursive: true });
-
-  const extPath = path.join(process.cwd(), 'extensions', 'nopecha');
-  const extArgs = fs.existsSync(extPath)
-    ? [`--disable-extensions-except=${extPath}`, `--load-extension=${extPath}`]
-    : [];
-
-  if (extArgs.length > 0) {
-    console.log('[Daemon] 🧩 NopeCHA Captcha & Cloudflare Solver Extension loaded successfully!');
-  }
-
-  const isHeadless = !process.env.DISPLAY;
-  console.log(`[Daemon] 🚀 Launching Browser Profile (Headless: ${isHeadless}, Display: ${process.env.DISPLAY || 'None'})...`);
-
-  const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: isHeadless,
+  const context = await browser.newContext({
     viewport: {
       width: viewport.width || 1920,
       height: viewport.height || 1080
@@ -314,21 +475,7 @@ async function processRequest(chromium, requestData, requestId, workDir) {
       'Sec-Ch-Ua-Platform': '"Windows"',
       ...custom_headers
     },
-    acceptDownloads: true,
-    ignoreDefaultArgs: ['--enable-automation'],
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-infobars',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--window-size=1920,1080',
-      '--start-maximized',
-      '--lang=en-US,en',
-      ...extArgs
-    ]
+    acceptDownloads: true
   });
 
   if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
@@ -579,7 +726,8 @@ async function processRequest(chromium, requestData, requestId, workDir) {
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     }
 
-    // Cloudflare manual solver disabled - NopeCHA extension handles solving automatically
+    // Check and handle Cloudflare Turnstile Challenge if present
+    await handleCloudflareChallenge(page);
     finalUrl = page.url() || target_url;
     pageTitle = await page.title().catch(() => '');
 
@@ -685,6 +833,12 @@ async function packageAndRelease(requestId, workDir) {
 
   // Clean old parts
   fs.readdirSync(cwd).filter((f) => f.startsWith('payload.zip.part')).forEach((f) => fs.unlinkSync(path.join(cwd, f)));
+
+  // Ensure workDir is not empty before zipping
+  const filesInWork = fs.existsSync(workDir) ? fs.readdirSync(workDir) : [];
+  if (filesInWork.length === 0) {
+    writeErrorArtifacts(workDir, requestId, 'Empty work directory produced');
+  }
 
   // Zip work directory
   if (process.platform === 'win32') {

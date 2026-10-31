@@ -41,12 +41,12 @@ jobs:
       - name: Install system dependencies & Playwright (One-Time Setup)
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip coreutils xvfb
+          sudo apt-get install -y zip coreutils
           npm init -y
           npm install playwright single-file-cli
           npx playwright install --with-deps chromium
 
-      - name: Run Daemon Polling Worker (Virtual Headful Display)
+      - name: Run Daemon Polling Worker
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -56,4 +56,4 @@ jobs:
           AUTO_CHAIN: ${{ inputs.auto_chain || 'true' }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" node scripts/daemon_runner.mjs
+          node scripts/daemon_runner.mjs
