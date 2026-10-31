@@ -1049,6 +1049,17 @@ class OfflineBrowserUI:
           const win = this.frame.contentWindow;
           if (!doc || !win) return;
 
+          // Only intercept external cached web pages under /cache/
+          // NEVER intercept internal pages like /start or about:blank!
+          try {
+            const loc = win.location;
+            if (!loc || !loc.pathname || !loc.pathname.startsWith('/cache/')) {
+              return;
+            }
+          } catch (e) {
+            return;
+          }
+
           // Helper: Unique Descriptor Builder
           function buildDescriptor(el) {
             let selector = '';
@@ -1355,24 +1366,31 @@ class OfflineBrowserUI:
   <script>
     function doSearch() {{
       const q = document.getElementById('start-query').value.trim();
-      if (q) {{
-        let delay = 0;
-        try {{
-          if (parent && parent.window && parent.window.shellApp) {{
-            delay = parent.window.shellApp.getDelaySeconds();
-          }}
-        }} catch (e) {{}}
-        parent.window.pywebview.api.navigate(q, delay);
-      }}
-    }}
-    function quickNav(url) {{
-      let delay = 0;
+      if (!q) return;
       try {{
         if (parent && parent.window && parent.window.shellApp) {{
-          delay = parent.window.shellApp.getDelaySeconds();
+          parent.window.shellApp.urlBar.value = q;
+          parent.window.shellApp.onGoClick();
+          return;
         }}
       }} catch (e) {{}}
-      parent.window.pywebview.api.navigate(url, delay);
+      if (parent && parent.window && parent.window.pywebview && parent.window.pywebview.api) {{
+        parent.window.pywebview.api.navigate(q, 0);
+      }}
+    }}
+
+    function quickNav(url) {{
+      if (!url) return;
+      try {{
+        if (parent && parent.window && parent.window.shellApp) {{
+          parent.window.shellApp.urlBar.value = url;
+          parent.window.shellApp.onGoClick();
+          return;
+        }}
+      }} catch (e) {{}}
+      if (parent && parent.window && parent.window.pywebview && parent.window.pywebview.api) {{
+        parent.window.pywebview.api.navigate(url, 0);
+      }}
     }}
   </script>
 </body>
