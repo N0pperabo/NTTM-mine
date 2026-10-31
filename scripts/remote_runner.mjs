@@ -1,23 +1,37 @@
-// Auto-scroll page to trigger lazy-loaded images (e.g. comic covers)
-async function autoScrollPage(page) {
+// Auto-scroll page smoothly to trigger lazy-loaded images (e.g. comic covers, movie posters, video thumbs)
+async function autoScrollPage(page, delaySec = 0) {
   try {
-    await page.evaluate(async () => {
+    await page.evaluate(async (delay) => {
       await new Promise((resolve) => {
         let totalHeight = 0;
-        const distance = 400;
+        const distance = 500;
+        const maxScroll = Math.min(document.body.scrollHeight || 10000, 35000);
+        
+        // If delay is set, stretch scrolling across the delay period
+        const totalSteps = Math.max(1, Math.ceil(maxScroll / distance));
+        const stepInterval = delay > 0 ? Math.max(50, Math.floor((delay * 1000) / (totalSteps * 1.5))) : 50;
+
         const timer = setInterval(() => {
-          const scrollHeight = document.body.scrollHeight || 3000;
+          const currentMax = Math.min(document.body.scrollHeight || 10000, 35000);
           window.scrollBy(0, distance);
           totalHeight += distance;
-          if (totalHeight >= scrollHeight || totalHeight >= 4500) {
+
+          // Dispatch scroll and resize events so IntersectionObservers and scroll listeners trigger
+          window.dispatchEvent(new Event('scroll'));
+          window.dispatchEvent(new Event('resize'));
+
+          if (totalHeight >= currentMax) {
             clearInterval(timer);
-            window.scrollTo(0, 0);
+            // Scroll back to top so view is positioned at start
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            window.dispatchEvent(new Event('scroll'));
             resolve();
           }
-        }, 100);
+        }, stepInterval);
       });
-    });
-    await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+    }, delaySec);
+
+    await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
   } catch (e) {}
 }
 
@@ -152,30 +166,51 @@ async function main() {
     page.on('response', async (res) => {
       try {
         const url = res.url();
-        const ct = res.headers()['content-type'] || '';
-        if (ct.startsWith('image/') || /\.(png|jpe?g|webp|avif|gif|svg)(\?.*)?$/i.test(url)) {
+        const reqUrl = res.request() ? res.request().url() : url;
+        const ct = (res.headers()['content-type'] || '').toLowerCase();
+        const isImg =
+          ct.startsWith('image/') ||
+          /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(url) ||
+          /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(reqUrl);
+
+        if (isImg) {
           const buffer = await res.body();
           if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
-            const mime = ct.startsWith('image/') ? ct : 'image/jpeg';
-            imageMap.set(url, `data:${mime};base64,${buffer.toString('base64')}`);
+            let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
+            if (!mime || mime.includes('octet-stream')) {
+              if (url.includes('.png') || reqUrl.includes('.png')) mime = 'image/png';
+              else if (url.includes('.webp') || reqUrl.includes('.webp')) mime = 'image/webp';
+              else if (url.includes('.svg') || reqUrl.includes('.svg')) mime = 'image/svg+xml';
+              else if (url.includes('.gif') || reqUrl.includes('.gif')) mime = 'image/gif';
+              else mime = 'image/jpeg';
+            }
+            const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+            imageMap.set(url, dataUrl);
+            imageMap.set(reqUrl, dataUrl);
+            imageMap.set(url.split('?')[0], dataUrl);
+            imageMap.set(reqUrl.split('?')[0], dataUrl);
           }
         } else if (ct.includes('text/css') || url.endsWith('.css') || url.includes('.css?')) {
           const text = await res.text();
           if (text) {
             cssMap.set(url, text);
+            cssMap.set(reqUrl, text);
+            cssMap.set(url.split('?')[0], text);
           }
         } else if (ct.includes('font') || /\.(woff2?|ttf|otf|eot)(\?.*)?$/i.test(url)) {
           const buffer = await res.body();
           if (buffer && buffer.length > 0) {
-            const mime = ct.includes('font') ? ct : (url.includes('.woff2') ? 'font/woff2' : 'font/woff');
-            fontMap.set(url, `data:${mime};base64,${buffer.toString('base64')}`);
+            const mime = ct.includes('font') ? ct.split(';')[0].trim() : (url.includes('.woff2') ? 'font/woff2' : 'font/woff');
+            const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+            fontMap.set(url, dataUrl);
+            fontMap.set(reqUrl, dataUrl);
+            fontMap.set(url.split('?')[0], dataUrl);
           }
         }
       } catch (e) {}
     });
 
-    // Listen for file downloads
-    page.on('download', async (download) => {
+    page.on('download' , async (download) => {
       try {
         const filename = download.suggestedFilename() || `download_${Date.now()}`;
         const savePath = path.join(downloadDir, filename);
@@ -358,15 +393,12 @@ async function main() {
     }
 
     // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
-    await autoScrollPage(page);
-
-    // Apply custom delay if requested (e.g. for captchas, Cloudflare turnstile, dynamic rendering)
     const delaySec = parseInt(custom_delay_seconds || 0, 10);
     if (delaySec > 0) {
-      console.log(`[Runner] ⏱️ Waiting custom delay of ${delaySec} seconds before capture...`);
-      await page.waitForTimeout(delaySec * 1000);
-      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-      await autoScrollPage(page);
+      console.log(`[Runner] ⏱️ Custom delay ${delaySec}s active. Actively scrolling & triggering lazy loaders for full duration...`);
+      await autoScrollPage(page, delaySec);
+    } else {
+      await autoScrollPage(page, 0);
     }
 
     // Wait a brief moment for any pending download event to register
@@ -386,7 +418,8 @@ async function main() {
     // Save webpage if not a file download
     if (!downloadedFile) {
       console.log('[Runner] Serializing rendered DOM snapshot...');
-      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+      let serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+      serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
@@ -601,48 +634,90 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
         } catch (e) {}
       }
 
-      // 2. UNPACK LAZY LOADING DATA ATTRIBUTES (movie posters, avatars, manga/comic images)
+      // 2. UNPACK ALL LAZY-LOADING ATTRIBUTES ACROSS ALL DOM ELEMENTS
+      const LAZY_ATTRS = [
+        'data-image', 'data-thumb', 'data-thumb_url', 'data-thumbnail',
+        'data-mediumthumb', 'data-src', 'data-original', 'data-original-src',
+        'data-lazy-src', 'data-lazy', 'data-cover', 'data-poster', 'data-bg',
+        'data-background', 'data-bkg', 'data-url', 'data-file', 'data-actualsrc',
+        'data-orig', 'data-photo', 'data-img', 'data-source', 'data-webp',
+        'data-src-retina', 'data-hires'
+      ];
+
+      function isDummySrc(src) {
+        if (!src) return true;
+        const s = src.toLowerCase();
+        if (s.startsWith('data:image/svg') || s.startsWith('data:image/gif') || s.startsWith('data:image/jxl')) return true;
+        if (s.includes('blank') || s.includes('placeholder') || s.includes('transparent') || s.includes('spacer') || s.includes('loading')) return true;
+        if (s.startsWith('data:') && s.length < 1200) return true;
+        return false;
+      }
+
+      function getLazyUrl(el) {
+        for (const attr of LAZY_ATTRS) {
+          const val = el.getAttribute(attr);
+          if (val && typeof val === 'string' && val.trim()) {
+            return val.trim().split(' ')[0];
+          }
+        }
+        const srcset = el.getAttribute('srcset') || el.getAttribute('data-srcset');
+        if (srcset) {
+          const first = srcset.split(',')[0].trim().split(' ')[0];
+          if (first) return first;
+        }
+        return null;
+      }
+
+      // Unpack lazy attributes on all images, pictures, sources
       document.querySelectorAll('img, picture source').forEach((el) => {
-        const lazySrc =
-          el.getAttribute('data-src') ||
-          el.getAttribute('data-original') ||
-          el.getAttribute('data-lazy-src') ||
-          el.getAttribute('data-poster') ||
-          el.getAttribute('srcset');
-        if (
-          lazySrc &&
-          (!el.getAttribute('src') ||
-            el.getAttribute('src').startsWith('data:image/svg') ||
-            el.getAttribute('src').includes('blank'))
-        ) {
-          el.setAttribute('src', lazySrc.split(' ')[0]);
+        const currentSrc = el.getAttribute('src');
+        const lazyUrl = getLazyUrl(el);
+        if (lazyUrl && isDummySrc(currentSrc)) {
+          el.setAttribute('src', lazyUrl);
         }
       });
 
-      // 3. INLINE ALL <img> ELEMENTS (Guarantee 100% of images are data: URLs)
+      // Also unpack on div, span, a, figure, section
+      document.querySelectorAll('div, span, a, figure, section').forEach((el) => {
+        const lazyUrl = getLazyUrl(el);
+        if (lazyUrl && !el.getAttribute('style')?.includes('url(')) {
+          el.style.backgroundImage = `url("${lazyUrl}")`;
+        }
+      });
+
+      // 3. INLINE ALL <img> ELEMENTS (Guarantee all images are data: URLs)
       const allImgs = Array.from(document.querySelectorAll('img'));
       for (const img of allImgs) {
         try {
-          let src = img.src || img.getAttribute('src') || '';
-          if (!src || src.startsWith('data:')) continue;
+          let src = img.getAttribute('src') || img.src || '';
+          if (isDummySrc(src)) {
+            const lazy = getLazyUrl(img);
+            if (lazy) src = lazy;
+          }
+          if (!src) continue;
 
-          const absSrc = new URL(src, base).href;
-          let dataUrl = imgLookup.get(absSrc) || imgLookup.get(src);
+          // If already a real data URL (not a dummy placeholder), skip
+          if (src.startsWith('data:') && !isDummySrc(src)) continue;
 
-          // If not in map, try canvas conversion if complete and visible
-          if (!dataUrl && img.complete && img.naturalWidth > 0) {
+          let absSrc = src;
+          try { absSrc = new URL(src, base).href; } catch (e) {}
+
+          let dataUrl = imgLookup.get(absSrc) || imgLookup.get(src) || imgLookup.get(absSrc.split('?')[0]) || imgLookup.get(src.split('?')[0]);
+
+          // Canvas fallback if loaded in DOM
+          if (!dataUrl && img.complete && img.naturalWidth > 1) {
             try {
               const canvas = document.createElement('canvas');
               canvas.width = img.naturalWidth;
               canvas.height = img.naturalHeight;
               const ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0);
-              dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+              dataUrl = canvas.toDataURL('image/jpeg', 0.88);
             } catch (e) {}
           }
 
-          // If still not converted, fetch it directly in the page context!
-          if (!dataUrl) {
+          // In-page fetch fallback
+          if (!dataUrl && !absSrc.startsWith('data:')) {
             dataUrl = await fetchToDataUrl(absSrc, 'image/jpeg');
             if (dataUrl) {
               imgLookup.set(absSrc, dataUrl);
@@ -652,6 +727,8 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
           if (dataUrl) {
             img.src = dataUrl;
             img.setAttribute('src', dataUrl);
+          } else {
+            img.setAttribute('src', absSrc);
           }
         } catch (e) {}
       }
@@ -718,6 +795,102 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
 }
 
 // Check for common binary/download MIME types
+
+async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
+  if (!html) return html;
+
+  const attrRegex = /(?:src|data-(?:image|thumb|thumb_url|src|lazy|lazy-src|original|poster|cover|bg|background|webp|mediumthumb|hires|file|url))\s*=\s*(["'])(https?:\/\/[^\s"']+)\1/gi;
+  const cssUrlRegex = /url\(\s*(["']?)(https?:\/\/[^\s"')]+)\1\s*\)/gi;
+
+  const urlsToFetch = new Set();
+  let match;
+  while ((match = attrRegex.exec(html)) !== null) {
+    const u = match[2];
+    if (!imageMap.has(u) && !imageMap.has(u.split('?')[0])) {
+      urlsToFetch.add(u);
+    }
+  }
+  while ((match = cssUrlRegex.exec(html)) !== null) {
+    const u = match[2];
+    if (!imageMap.has(u) && !imageMap.has(u.split('?')[0])) {
+      urlsToFetch.add(u);
+    }
+  }
+
+  const imageExtRegex = /\.(jpe?g|png|webp|avif|gif|svg|bmp)(\?.*)?$/i;
+  const imageLikeRegex = /(?:\/image|\/img|\/thumb|\/poster|\/cover|\/pics|\/avatar|\/videos|\/panel)/i;
+
+  const candidateUrls = Array.from(urlsToFetch).filter(
+    (u) => imageExtRegex.test(u) || imageLikeRegex.test(u)
+  );
+
+  if (candidateUrls.length > 0) {
+    console.log(`[Sweeper] 🧹 Found ${candidateUrls.length} remaining images to fetch directly via Node.js...`);
+    const CONCURRENCY = 10;
+    for (let i = 0; i < candidateUrls.length; i += CONCURRENCY) {
+      const batch = candidateUrls.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        batch.map(async (imgUrl) => {
+          try {
+            const res = await fetch(imgUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Referer': baseUrl,
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+              },
+              signal: AbortSignal.timeout(10000)
+            });
+            if (res.ok) {
+              const ct = (res.headers.get('content-type') || '').toLowerCase();
+              let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
+              if (mime.includes('octet-stream')) {
+                if (imgUrl.includes('.png')) mime = 'image/png';
+                else if (imgUrl.includes('.webp')) mime = 'image/webp';
+                else if (imgUrl.includes('.svg')) mime = 'image/svg+xml';
+                else if (imgUrl.includes('.gif')) mime = 'image/gif';
+                else mime = 'image/jpeg';
+              }
+              const buf = Buffer.from(await res.arrayBuffer());
+              if (buf.length > 0 && buf.length <= 25 * 1024 * 1024) {
+                const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
+                imageMap.set(imgUrl, dataUrl);
+                imageMap.set(imgUrl.split('?')[0], dataUrl);
+              }
+            }
+          } catch (err) {}
+        })
+      );
+    }
+  }
+
+  // Replace external image URLs in HTML
+  let processedHtml = html;
+  for (const [rawUrl, dataUrl] of imageMap.entries()) {
+    if (processedHtml.includes(rawUrl)) {
+      processedHtml = processedHtml.replaceAll(rawUrl, dataUrl);
+    }
+  }
+
+  // Ensure any <img ...> that has data-image / data-thumb in data: URL format has its src set!
+  processedHtml = processedHtml.replace(/<img\b([^>]*?)>/gi, (fullTag, attrs) => {
+    const hasValidSrc = /src=["']data:image\/(?:jpeg|png|webp|avif)/i.test(attrs);
+    if (!hasValidSrc) {
+      const lazyDataMatch = attrs.match(/data-(?:image|thumb|thumb_url|src|original|poster|cover)=["'](data:image\/[^"']+)["']/i);
+      if (lazyDataMatch) {
+        const realDataUrl = lazyDataMatch[1];
+        if (/src=["'][^"']*["']/i.test(attrs)) {
+          return `<img ${attrs.replace(/src=["'][^"']*["']/i, `src="${realDataUrl}"`)}>`;
+        } else {
+          return `<img src="${realDataUrl}" ${attrs}>`;
+        }
+      }
+    }
+    return fullTag;
+  });
+
+  return processedHtml;
+}
+
 function isBinaryMime(mime) {
   if (!mime) return false;
   const m = mime.toLowerCase();
