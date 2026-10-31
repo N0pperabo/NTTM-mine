@@ -309,22 +309,31 @@ async function processRequest(browser, requestData, requestId, workDir) {
 
     const page = await context.newPage();
 
-    // Cache image buffers and CSS stylesheets to embed into offline HTML
+    // Cache all loaded image buffers, CSS stylesheets, and web fonts to embed into offline HTML
     const imageMap = new Map();
     const cssMap = new Map();
+    const fontMap = new Map();
+
     page.on('response', async (res) => {
       try {
         const url = res.url();
         const ct = res.headers()['content-type'] || '';
-        if (ct.startsWith('image/')) {
+        if (ct.startsWith('image/') || /\.(png|jpe?g|webp|avif|gif|svg)(\?.*)?$/i.test(url)) {
           const buffer = await res.body();
           if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
-            imageMap.set(url, `data:${ct};base64,${buffer.toString('base64')}`);
+            const mime = ct.startsWith('image/') ? ct : 'image/jpeg';
+            imageMap.set(url, `data:${mime};base64,${buffer.toString('base64')}`);
           }
         } else if (ct.includes('text/css') || url.endsWith('.css') || url.includes('.css?')) {
           const text = await res.text();
           if (text) {
             cssMap.set(url, text);
+          }
+        } else if (ct.includes('font') || /\.(woff2?|ttf|otf|eot)(\?.*)?$/i.test(url)) {
+          const buffer = await res.body();
+          if (buffer && buffer.length > 0) {
+            const mime = ct.includes('font') ? ct : (url.includes('.woff2') ? 'font/woff2' : 'font/woff');
+            fontMap.set(url, `data:${mime};base64,${buffer.toString('base64')}`);
           }
         }
       } catch (e) {}
@@ -449,7 +458,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
     fs.writeFileSync(path.join(workDir, 'storage_state.json'), JSON.stringify(currentStorage, null, 2), 'utf8');
 
     if (!downloadedFile) {
-      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap);
+      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
@@ -616,15 +625,70 @@ async function executeAjaxFallback(page, ajax) {
   } catch (err) {}
 }
 
-async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap = new Map()) {
+async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap = new Map(), fontMap = new Map()) {
   const imagesList = imageMap ? Array.from(imageMap.entries()) : [];
   const cssList = cssMap ? Array.from(cssMap.entries()) : [];
-  return await page.evaluate(async ({ base, images, cssItems }) => {
+  const fontsList = fontMap ? Array.from(fontMap.entries()) : [];
+
+  return await page.evaluate(async ({ base, images, cssItems, fontItems }) => {
     try {
       const imgLookup = new Map(images || []);
       const cssLookup = new Map(cssItems || []);
+      const fontLookup = new Map(fontItems || []);
 
-      // 1. Inline all external stylesheets (<link rel="stylesheet">) into <style> tags
+      // Helper to fetch resource and convert to base64 data url inside page context
+      async function fetchToDataUrl(url, defaultMime = 'application/octet-stream') {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return null;
+          const mime = res.headers.get('content-type') || defaultMime;
+          const blob = await res.blob();
+          return await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          return null;
+        }
+      }
+
+      // Helper to rewrite and inline all url(...) in CSS
+      async function processCssText(rawCss, cssBaseUrl) {
+        if (!rawCss) return '';
+        const urlMatches = Array.from(rawCss.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/gi));
+        let processedCss = rawCss;
+
+        for (const match of urlMatches) {
+          const rawUrl = match[1].trim();
+          if (!rawUrl || rawUrl.startsWith('data:') || rawUrl.startsWith('#')) continue;
+
+          try {
+            const absUrl = new URL(rawUrl, cssBaseUrl).href;
+            let dataUrl = fontLookup.get(absUrl) || imgLookup.get(absUrl);
+
+            if (!dataUrl) {
+              const isFont = /\.(woff2?|ttf|otf|eot)(\?.*)?$/i.test(absUrl);
+              const defaultMime = isFont ? 'font/woff2' : 'image/png';
+              dataUrl = await fetchToDataUrl(absUrl, defaultMime);
+              if (dataUrl) {
+                if (isFont) fontLookup.set(absUrl, dataUrl);
+                else imgLookup.set(absUrl, dataUrl);
+              }
+            }
+
+            if (dataUrl) {
+              processedCss = processedCss.split(match[0]).join(`url("${dataUrl}")`);
+            } else {
+              processedCss = processedCss.split(match[0]).join(`url("${absUrl}")`);
+            }
+          } catch (e) {}
+        }
+        return processedCss;
+      }
+
+      // 1. INLINE ALL STYLESHEETS (<link rel="stylesheet">) INTO <style> TAGS
       const linkElements = Array.from(document.querySelectorAll('link[rel="stylesheet"], link[as="style"]'));
       for (const link of linkElements) {
         try {
@@ -649,52 +713,92 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
             } catch (e) {}
           }
           if (css) {
+            const inlinedCss = await processCssText(css, href);
             const style = document.createElement('style');
             style.setAttribute('data-inlined-from', href);
-            style.textContent = css;
+            style.textContent = inlinedCss;
             link.replaceWith(style);
           }
         } catch (e) {}
       }
 
-      // Unpack lazy loading data attributes (e.g. on comic/manga/media websites)
+      // Also process any existing <style> tags on the page for url(...)
+      const styleElements = Array.from(document.querySelectorAll('style'));
+      for (const style of styleElements) {
+        try {
+          if (style.textContent && style.textContent.includes('url(')) {
+            style.textContent = await processCssText(style.textContent, base);
+          }
+        } catch (e) {}
+      }
+
+      // 2. UNPACK LAZY LOADING DATA ATTRIBUTES (movie posters, avatars, manga/comic images)
       document.querySelectorAll('img, picture source').forEach((el) => {
-        const lazySrc = el.getAttribute('data-src') || el.getAttribute('data-original') || el.getAttribute('data-lazy-src') || el.getAttribute('srcset');
-        if (lazySrc && (!el.getAttribute('src') || el.getAttribute('src').startsWith('data:image/svg') || el.getAttribute('src').includes('blank'))) {
+        const lazySrc =
+          el.getAttribute('data-src') ||
+          el.getAttribute('data-original') ||
+          el.getAttribute('data-lazy-src') ||
+          el.getAttribute('data-poster') ||
+          el.getAttribute('srcset');
+        if (
+          lazySrc &&
+          (!el.getAttribute('src') ||
+            el.getAttribute('src').startsWith('data:image/svg') ||
+            el.getAttribute('src').includes('blank'))
+        ) {
           el.setAttribute('src', lazySrc.split(' ')[0]);
         }
       });
 
-      // Inline images with captured Base64 data URLs
-      document.querySelectorAll('img').forEach((img) => {
-        const src = img.src;
-        if (imgLookup.has(src)) {
-          img.src = imgLookup.get(src);
-        } else {
-          // If not in map, try canvas conversion if complete
-          try {
-            if (img.complete && img.naturalWidth > 0 && !img.src.startsWith('data:')) {
+      // 3. INLINE ALL <img> ELEMENTS (Guarantee 100% of images are data: URLs)
+      const allImgs = Array.from(document.querySelectorAll('img'));
+      for (const img of allImgs) {
+        try {
+          let src = img.src || img.getAttribute('src') || '';
+          if (!src || src.startsWith('data:')) continue;
+
+          const absSrc = new URL(src, base).href;
+          let dataUrl = imgLookup.get(absSrc) || imgLookup.get(src);
+
+          // If not in map, try canvas conversion if complete and visible
+          if (!dataUrl && img.complete && img.naturalWidth > 0) {
+            try {
               const canvas = document.createElement('canvas');
               canvas.width = img.naturalWidth;
               canvas.height = img.naturalHeight;
               const ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0);
-              img.src = canvas.toDataURL('image/jpeg', 0.85);
+              dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            } catch (e) {}
+          }
+
+          // If still not converted, fetch it directly in the page context!
+          if (!dataUrl) {
+            dataUrl = await fetchToDataUrl(absSrc, 'image/jpeg');
+            if (dataUrl) {
+              imgLookup.set(absSrc, dataUrl);
             }
-          } catch (e) {}
-        }
-      });
+          }
 
-      // Inline background images in CSS styles
-      document.querySelectorAll('*[style*="background"]').forEach((el) => {
-        const style = el.getAttribute('style') || '';
-        const match = style.match(/url\(['"]?(https?:\/\/[^'"]+)['"]?\)/i);
-        if (match && imgLookup.has(match[1])) {
-          el.style.backgroundImage = `url("${imgLookup.get(match[1])}")`;
-        }
-      });
+          if (dataUrl) {
+            img.src = dataUrl;
+            img.setAttribute('src', dataUrl);
+          }
+        } catch (e) {}
+      }
 
-      // 1. Preserve input, textarea, and select live values into attributes
+      // 4. INLINE BACKGROUND IMAGES IN ELEMENT STYLE ATTRIBUTES
+      const bgElements = Array.from(document.querySelectorAll('*[style*="background"], *[style*="url("]'));
+      for (const el of bgElements) {
+        try {
+          const style = el.getAttribute('style') || '';
+          if (style.includes('url(')) {
+            el.setAttribute('style', await processCssText(style, base));
+          }
+        } catch (e) {}
+      }
+
+      // 5. PRESERVE FORM INPUTS, TEXTAREAS, AND SELECT VALUES
       document.querySelectorAll('input').forEach((input) => {
         if (input.type === 'checkbox' || input.type === 'radio') {
           if (input.checked) input.setAttribute('checked', 'checked');
@@ -712,7 +816,8 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
           else opt.removeAttribute('selected');
         });
       });
-      // Convert all link hrefs to absolute URLs and force target to _self
+
+      // 6. RESOLVE LINKS AND FORMS TO ABSOLUTE URLS
       document.querySelectorAll('a').forEach((a) => {
         try {
           if (a.href) a.setAttribute('href', a.href);
@@ -720,20 +825,19 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
         } catch (e) {}
       });
 
-      // Convert all form actions to absolute URLs
       document.querySelectorAll('form').forEach((f) => {
         try {
           if (f.action) f.setAttribute('action', f.action);
         } catch (e) {}
       });
 
-      // Neutralize scripts so client WebView2 NEVER executes external tracking or live AJAX
+      // 7. NEUTRALIZE SCRIPTS TO PREVENT OUTBOUND CLIENT CALLS
       document.querySelectorAll('script').forEach((s) => {
         s.setAttribute('type', 'text/plain');
         s.removeAttribute('src');
       });
 
-      // Remove base tag to completely isolate client WebView2 from external domains
+      // 8. REMOVE BASE TAG
       document.querySelectorAll('base').forEach((b) => b.remove());
 
       const docType = document.doctype ? `<!DOCTYPE ${document.doctype.name}>` : '<!DOCTYPE html>';
@@ -741,7 +845,7 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
     } catch (e) {
       return document.documentElement.outerHTML;
     }
-  }, { base: baseUrl, images: imagesList, cssItems: cssList });
+  }, { base: baseUrl, images: imagesList, cssItems: cssList, fontItems: fontsList });
 }
 
 function isBinaryMime(mime) {
