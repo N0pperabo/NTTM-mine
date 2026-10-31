@@ -1,3 +1,133 @@
+
+// Cloudflare Challenge / Turnstile Automatic Detector & Solver
+async function handleCloudflareChallenge(page) {
+  try {
+    // 1. FAST CHECK: Is Cloudflare challenge present?
+    const title = (await page.title().catch(() => '')).toLowerCase();
+    const isCfTitle =
+      title.includes('just a moment') ||
+      title.includes('checking your browser') ||
+      title.includes('attention required') ||
+      title.includes('ddos-guard') ||
+      title.includes('security check');
+
+    const hasCfElement = await page.evaluate(() => {
+      try {
+        return !!(
+          document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+          document.querySelector('iframe[src*="challenge-platform"]') ||
+          document.querySelector('#challenge-stage') ||
+          document.querySelector('#challenge-running') ||
+          document.querySelector('#challenge-form') ||
+          document.querySelector('.cf-turnstile') ||
+          document.querySelector('#turnstile-wrapper') ||
+          document.querySelector('input[name="cf-turnstile-response"]') ||
+          (document.body && (
+            document.body.innerText.includes('Verify you are human') ||
+            document.body.innerText.includes('Checking if the site connection is secure') ||
+            document.body.innerText.includes('Cloudflare')
+          ))
+        );
+      } catch (e) {
+        return false;
+      }
+    }).catch(() => false);
+
+    if (!isCfTitle && !hasCfElement) {
+      // No Cloudflare detected - proceed immediately with zero delay
+      return false;
+    }
+
+    console.log('[Cloudflare] 🛡️ Cloudflare Challenge / Turnstile detected!');
+    console.log('[Cloudflare] ⏳ Waiting up to 15 seconds for challenge & Turnstile iframe to fully render...');
+
+    // 2. Wait up to 15s for the challenge iframe to appear
+    const iframeLocator = page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]').first();
+    let iframeVisible = false;
+    try {
+      await iframeLocator.waitFor({ state: 'visible', timeout: 15000 });
+      iframeVisible = true;
+      console.log('[Cloudflare] Turnstile challenge iframe is now visible.');
+    } catch (e) {
+      console.log('[Cloudflare] Iframe wait timed out or challenge is JS-based without visible iframe.');
+    }
+
+    // Let the widget settle and execute initial telemetry (human-like pause)
+    await page.waitForTimeout(2000);
+
+    // 3. Attempt to locate and click the checkbox with human-like mouse movement
+    let clicked = false;
+
+    // Strategy A: frameLocator to find inner checkbox or label
+    try {
+      const cfFrame = page.frameLocator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]').first();
+      const checkbox = cfFrame.locator('input[type="checkbox"], .ctp-checkbox-label, label, #challenge-stage, body').first();
+      if ((await checkbox.count()) > 0) {
+        const box = await checkbox.boundingBox();
+        if (box && box.width > 0 && box.height > 0) {
+          const clickX = box.x + Math.min(30, box.width / 2);
+          const clickY = box.y + box.height / 2;
+          console.log(`[Cloudflare] 🖱️ Moving mouse naturally to inner checkbox: x=${clickX}, y=${clickY}`);
+          await page.mouse.move(clickX, clickY, { steps: 25 });
+          await page.waitForTimeout(300);
+          await page.mouse.down();
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+          clicked = true;
+          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy A (frameLocator).');
+        }
+      }
+    } catch (errA) {}
+
+    // Strategy B: If inner locator was blocked by closed shadow root, click the iframe bounding box at the checkbox offset
+    if (!clicked && iframeVisible) {
+      try {
+        const box = await iframeLocator.boundingBox();
+        if (box) {
+          // In Cloudflare Turnstile, the checkbox is horizontally ~28-35px from left, vertically centered
+          const targetX = box.x + 30;
+          const targetY = box.y + box.height / 2;
+          console.log(`[Cloudflare] 🖱️ Moving mouse to iframe bounding box coordinates: x=${targetX}, y=${targetY}`);
+          await page.mouse.move(targetX, targetY, { steps: 25 });
+          await page.waitForTimeout(300);
+          await page.mouse.down();
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+          clicked = true;
+          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy B (Iframe Coordinates).');
+        }
+      } catch (errB) {}
+    }
+
+    console.log('[Cloudflare] ⏳ Waiting up to 10 seconds for checkbox verification (turn green) & redirect to destination site...');
+
+    // 4. Wait for clearance and redirect (up to 12s)
+    const waitStartTime = Date.now();
+    while (Date.now() - waitStartTime < 12000) {
+      await page.waitForTimeout(800);
+      const currentTitle = (await page.title().catch(() => '')).toLowerCase();
+      const stillInCf =
+        currentTitle.includes('just a moment') ||
+        currentTitle.includes('checking your browser') ||
+        currentTitle.includes('attention required') ||
+        currentTitle.includes('security check');
+
+      if (!stillInCf) {
+        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loaded: "${await page.title().catch(() => '')}"`);
+        await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        return true;
+      }
+    }
+
+    console.log('[Cloudflare] Finished challenge handling cycle.');
+    return true;
+  } catch (err) {
+    console.warn('[Cloudflare] Error in handler:', err.message);
+    return false;
+  }
+}
+
 // Auto-scroll page smoothly to trigger lazy-loaded images (e.g. comic covers, movie posters, video thumbs)
 async function autoScrollPage(page, delaySec = 0) {
   try {
@@ -557,13 +687,30 @@ async function processRequest(browser, requestData, requestId, workDir) {
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     }
 
-    // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
-    const delaySec = parseInt(custom_delay_seconds || 0, 10);
-    if (delaySec > 0) {
-      console.log(`[Daemon] ⏱️ Custom delay ${delaySec}s active. Actively scrolling & triggering lazy loaders for full duration...`);
-      await autoScrollPage(page, delaySec);
+    // 0. FIRST STEP: Cloudflare Challenge / Turnstile Check & Solve
+    console.log('[Daemon] 🔍 Checking for Cloudflare challenge / Turnstile...');
+    await handleCloudflareChallenge(page);
+
+    // If still on Cloudflare challenge screen, DO NOT SCROLL!
+    const currentTitle = (await page.title().catch(() => '')).toLowerCase();
+    const isStillCloudflare =
+      currentTitle.includes('just a moment') ||
+      currentTitle.includes('checking your browser') ||
+      currentTitle.includes('attention required') ||
+      currentTitle.includes('security check') ||
+      currentTitle.includes('ddos-guard');
+
+    if (!isStillCloudflare) {
+      // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
+      const delaySec = parseInt(custom_delay_seconds || 0, 10);
+      if (delaySec > 0) {
+        console.log(`[Daemon] ⏱️ Custom delay ${delaySec}s active. Actively scrolling & triggering lazy loaders for full duration...`);
+        await autoScrollPage(page, delaySec);
+      } else {
+        await autoScrollPage(page, 0);
+      }
     } else {
-      await autoScrollPage(page, 0);
+      console.log('[Daemon] ⚠️ Page is on Cloudflare challenge screen. Skipping auto-scroll as requested.');
     }
 
     await page.waitForTimeout(1000);
