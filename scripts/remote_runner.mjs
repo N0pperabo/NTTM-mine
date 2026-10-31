@@ -3,49 +3,57 @@
 async function handleCloudflareChallenge(page) {
   try {
     // 1. FAST CHECK: Is Cloudflare challenge present?
-    const title = (await page.title().catch(() => '')).toLowerCase();
-    const isCfTitle =
-      title.includes('just a moment') ||
-      title.includes('checking your browser') ||
-      title.includes('attention required') ||
-      title.includes('ddos-guard') ||
-      title.includes('security check') ||
-      title.includes('چند لحظه صبر کنید') ||
-      title.includes('یک لحظه صبر کنید') ||
-      title.includes('در حال بررسی') ||
-      title.includes('لطفا صبر کنید');
+    const checkIsChallenge = async () => {
+      const title = (await page.title().catch(() => '')).toLowerCase();
+      const isCfTitle =
+        title.includes('just a moment') ||
+        title.includes('checking your browser') ||
+        title.includes('attention required') ||
+        title.includes('ddos-guard') ||
+        title.includes('security check') ||
+        title.includes('چند لحظه صبر کنید') ||
+        title.includes('یک لحظه صبر کنید') ||
+        title.includes('در حال بررسی') ||
+        title.includes('لطفا صبر کنید') ||
+        title.includes('تایید امنیتی');
 
-    const hasCfElement = await page.evaluate(() => {
-      try {
-        return !!(
-          document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
-          document.querySelector('iframe[src*="challenge-platform"]') ||
-          document.querySelector('#challenge-stage') ||
-          document.querySelector('#challenge-running') ||
-          document.querySelector('#challenge-form') ||
-          document.querySelector('.cf-turnstile') ||
-          document.querySelector('#turnstile-wrapper') ||
-          document.querySelector('input[name="cf-turnstile-response"]') ||
-          (document.body && (
-            document.body.innerText.includes('Verify you are human') ||
-            document.body.innerText.includes('Checking if the site connection is secure') ||
-            document.body.innerText.includes('Cloudflare')
-          ))
-        );
-      } catch (e) {
-        return false;
-      }
-    }).catch(() => false);
+      const hasCfElement = await page.evaluate(() => {
+        try {
+          const text = (document.body ? document.body.innerText : '') || '';
+          return !!(
+            document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+            document.querySelector('iframe[src*="challenge-platform"]') ||
+            document.querySelector('#challenge-stage') ||
+            document.querySelector('#challenge-running') ||
+            document.querySelector('#challenge-form') ||
+            document.querySelector('.cf-turnstile') ||
+            document.querySelector('#turnstile-wrapper') ||
+            document.querySelector('input[name="cf-turnstile-response"]') ||
+            window._cf_chl_opt ||
+            text.includes('Verify you are human') ||
+            text.includes('Checking if the site connection is secure') ||
+            text.includes('در حال انجام تایید امنیتی') ||
+            text.includes('تایید موفقیت آمیز بود') ||
+            text.includes('در انتظار هدایت') ||
+            text.includes('Cloudflare')
+          );
+        } catch (e) {
+          return false;
+        }
+      }).catch(() => false);
 
-    if (!isCfTitle && !hasCfElement) {
-      // No Cloudflare detected - proceed immediately with zero delay
+      return isCfTitle || hasCfElement;
+    };
+
+    if (!(await checkIsChallenge())) {
+      // Zero overhead: No Cloudflare challenge detected!
       return false;
     }
 
     console.log('[Cloudflare] 🛡️ Cloudflare Challenge / Turnstile detected!');
     console.log('[Cloudflare] ⏳ Waiting up to 15 seconds for challenge & Turnstile iframe to fully render...');
 
-    // 2. Wait up to 15s for the challenge iframe to appear
+    // 2. Wait up to 15s for the challenge iframe or widget to appear
     const iframeLocator = page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]').first();
     let iframeVisible = false;
     try {
@@ -53,10 +61,10 @@ async function handleCloudflareChallenge(page) {
       iframeVisible = true;
       console.log('[Cloudflare] Turnstile challenge iframe is now visible.');
     } catch (e) {
-      console.log('[Cloudflare] Iframe wait timed out or challenge is JS-based without visible iframe.');
+      console.log('[Cloudflare] Iframe wait finished or challenge is running via background JS.');
     }
 
-    // Let the widget settle and execute initial telemetry (human-like pause)
+    // Let the widget settle and execute initial telemetry
     await page.waitForTimeout(2000);
 
     // 3. Attempt to locate and click the checkbox with human-like mouse movement
@@ -88,7 +96,6 @@ async function handleCloudflareChallenge(page) {
       try {
         const box = await iframeLocator.boundingBox();
         if (box) {
-          // In Cloudflare Turnstile, the checkbox is horizontally ~28-35px from left, vertically centered
           const targetX = box.x + 30;
           const targetY = box.y + box.height / 2;
           console.log(`[Cloudflare] 🖱️ Moving mouse to iframe bounding box coordinates: x=${targetX}, y=${targetY}`);
@@ -103,43 +110,37 @@ async function handleCloudflareChallenge(page) {
       } catch (errB) {}
     }
 
-    console.log('[Cloudflare] ⏳ Waiting up to 10 seconds for checkbox verification (turn green) & redirect to destination site...');
+    console.log('[Cloudflare] ⏳ Waiting up to 35 seconds for verification & redirect to destination site...');
 
-    // 4. Wait for clearance and redirect (up to 12s)
+    // 4. Wait for clearance and redirect (up to 35 seconds)
     const waitStartTime = Date.now();
-    while (Date.now() - waitStartTime < 12000) {
-      await page.waitForTimeout(800);
-      const currentTitle = (await page.title().catch(() => '')).toLowerCase();
-      const stillInCf =
-        currentTitle.includes('just a moment') ||
-        currentTitle.includes('checking your browser') ||
-        currentTitle.includes('attention required') ||
-        currentTitle.includes('security check') ||
-        currentTitle.includes('ddos-guard') ||
-        currentTitle.includes('چند لحظه صبر کنید') ||
-        currentTitle.includes('یک لحظه صبر کنید') ||
-        currentTitle.includes('در حال بررسی') ||
-        currentTitle.includes('لطفا صبر کنید');
+    while (Date.now() - waitStartTime < 35000) {
+      await page.waitForTimeout(1000);
 
-      let stillHasElement = false;
-      try {
-        stillHasElement = await page.evaluate(() => {
-          return !!(
-            document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
-            document.querySelector('iframe[src*="challenge-platform"]') ||
-            document.querySelector('#challenge-stage') ||
-            document.querySelector('#challenge-running') ||
-            document.querySelector('#challenge-form')
-          );
-        }).catch(() => false);
-      } catch (e) {}
-
-      if (!stillInCf && !stillHasElement) {
-        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loading: "${await page.title().catch(() => '')}"`);
-        console.log('[Runner] ⏳ Waiting for destination page navigation to settle...');
+      // Check if redirect already occurred or challenge is completely gone
+      const isStillInChallenge = await checkIsChallenge();
+      if (!isStillInChallenge) {
+        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loaded: "${await page.title().catch(() => '')}"`);
         await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
         await page.waitForTimeout(2000);
+        return true;
+      }
+
+      // Check if it's currently showing "Success / Waiting for redirect"
+      const isRedirectPending = await page.evaluate(() => {
+        const t = (document.body ? document.body.innerText : '') || '';
+        return t.includes('تایید موفقیت آمیز بود') || t.includes('در انتظار هدایت') || t.includes('Waiting to be redirected') || t.includes('Redirecting');
+      }).catch(() => false);
+
+      if (isRedirectPending) {
+        console.log('[Cloudflare] ⏳ Verification succeeded! Actively waiting for destination navigation to complete...');
+        // Wait for actual navigation
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(2000);
+        console.log(`[Cloudflare] 🎉 Navigation completed! Current page: "${await page.title().catch(() => '')}"`);
         return true;
       }
     }
@@ -621,14 +622,21 @@ async function main() {
     console.log('[Runner] 🔍 Checking for Cloudflare challenge / Turnstile...');
     await handleCloudflareChallenge(page);
 
+    finalUrl = page.url() || target_url;
+    pageTitle = await page.title().catch(() => '');
+
     // If still on Cloudflare challenge screen, DO NOT SCROLL!
-    const currentTitle = (await page.title().catch(() => '')).toLowerCase();
+    const currentTitle = (pageTitle || '').toLowerCase();
     const isStillCloudflare =
       currentTitle.includes('just a moment') ||
       currentTitle.includes('checking your browser') ||
       currentTitle.includes('attention required') ||
       currentTitle.includes('security check') ||
-      currentTitle.includes('ddos-guard');
+      currentTitle.includes('ddos-guard') ||
+      currentTitle.includes('چند لحظه صبر کنید') ||
+      currentTitle.includes('یک لحظه صبر کنید') ||
+      currentTitle.includes('در حال بررسی') ||
+      currentTitle.includes('تایید امنیتی');
 
     if (!isStillCloudflare) {
       // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
