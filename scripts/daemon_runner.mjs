@@ -157,7 +157,19 @@ async function main() {
 
   const browser = await chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security']
+    ignoreDefaultArgs: ['--enable-automation'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-web-security',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-infobars',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--window-size=1920,1080',
+      '--lang=en-US,en'
+    ]
   });
 
   console.log('[Daemon] Chromium browser instance initialized and hot in memory.');
@@ -283,10 +295,19 @@ async function processRequest(browser, requestData, requestId, workDir) {
 
   const contextOptions = {
     viewport: {
-      width: viewport.width || 1366,
-      height: viewport.height || 768
+      width: viewport.width || 1920,
+      height: viewport.height || 1080
     },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    locale: 'en-US',
+    timezoneId: 'America/New_York',
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9,fa;q=0.8',
+      'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+      'Sec-Ch-Ua-Mobile': '?0',
+      'Sec-Ch-Ua-Platform': '"Windows"',
+      ...custom_headers
+    },
     acceptDownloads: true
   };
 
@@ -295,6 +316,68 @@ async function processRequest(browser, requestData, requestId, workDir) {
   }
 
   const context = await browser.newContext(contextOptions);
+    // Comprehensive Anti-Bot Stealth Masking
+    await context.addInitScript(() => {
+      try {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        delete Object.getPrototypeOf(navigator).webdriver;
+      } catch (e) {}
+
+      try {
+        if (!window.chrome) {
+          window.chrome = {};
+        }
+        window.chrome.app = {
+          isInstalled: false,
+          InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+          RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+        };
+        window.chrome.runtime = {
+          OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update' },
+          OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
+          PlatformArch: { ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformNaclArch: { ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+          PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
+          RequestUpdateCheckStatus: { NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' }
+        };
+      } catch (e) {}
+
+      try {
+        const fakePlugins = [
+          { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+          { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+          { name: 'Chromium PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }
+        ];
+        Object.defineProperty(navigator, 'plugins', { get: () => fakePlugins });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'fa'] });
+      } catch (e) {}
+
+      try {
+        const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+          if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+          return getParameterProto.apply(this, [parameter]);
+        };
+        if (typeof WebGL2RenderingContext !== 'undefined') {
+          const getParameter2Proto = WebGL2RenderingContext.prototype.getParameter;
+          WebGL2RenderingContext.prototype.getParameter = function (parameter) {
+            if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+            if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+            return getParameter2Proto.apply(this, [parameter]);
+          };
+        }
+      } catch (e) {}
+
+      try {
+        const origQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) =>
+          parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : origQuery(parameters);
+      } catch (e) {}
+    });
+
   let downloadedFile = null;
   let actionsExecuted = 0;
   let finalUrl = target_url;
