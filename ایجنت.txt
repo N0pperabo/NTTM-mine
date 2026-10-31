@@ -1,0 +1,246 @@
+Markdown
+# MASTER ORCHESTRATOR PROMPT: GitHub-Based Covert Channel Offline Browser (Ultimate Edition: Full-State, SPA/AJAX Replay, Action Batching & 50MB Chunking)
+
+## 1. Mission & Hard Network Constraints
+You are the Lead Principal Architect and Autonomous Multi-Agent Orchestrator in Google Antigravity. Your mission is to build a complete, production-ready **Asynchronous GitHub-Based Offline Web Browser, SPA Action Replayer, and Chunked File Downloader**.
+
+### Hard Network Constraints:
+- The client machine is inside a strictly isolated network where ALL internet access is blocked EXCEPT `github.com`, `api.github.com`, and GitHub Release asset domains (`*.githubusercontent.com`).
+- Third-party tunnels, proxies, or external servers are strictly forbidden.
+- All web navigation, search queries, form submissions, SPA/AJAX interactions, cookie/session synchronization, and large file downloads MUST operate 100% through GitHub REST API, GitHub Actions, and GitHub Releases.
+
+---
+
+## 2. Target Directory Structure
+Create and verify this exact directory tree:
+```text
+github-offline-browser/
+├── .github/
+│   └── workflows/
+│       └── fetcher.yml          # [Agent 1] CI workflow: Runner setup, Playwright execution, 50MB chunking & Release upload
+├── scripts/
+│   └── remote_runner.mjs        # [Agent 1] Playwright engine: Session hydration, Action/AJAX replay, SingleFile & Downloader
+├── client/
+│   ├── __init__.py
+│   ├── config.py                # [Agent 4] Configuration & PAT management
+│   ├── session_manager.py       # [Agent 2] Persistent local storage for Cookies, localStorage & sessionStorage
+│   ├── transport.py             # [Agent 2] GitHub API Envelope uploader, Release Poller & 50MB Chunk Assembler
+│   └── browser_ui.py            # [Agent 3] PyWebView Shell, Action Queue UI, AJAX Trap & Deep DOM Interceptor
+├── main.py                      # [Agent 4] Application entrypoint wiring all components
+├── requirements.txt             # [Agent 4] Python dependencies
+└── README.md                    # [Agent 4] Complete Persian setup & usage guide
+3. Strict Shared Data & Protocol Contracts (Single Source of Truth)
+All agents MUST adhere strictly to these schemas so parallel modules integrate with zero friction:
+
+A. Request Dispatch Envelope (requests/<request_id>.json)
+Client generates request_id = f"{int(time.time())}_{uuid.uuid4().hex[:6]}".
+
+Client uploads requests/{request_id}.json via PUT /repos/{owner}/{repo}/contents/requests/{request_id}.json with the following exact JSON schema:
+
+JSON
+{
+  "request_id": "1730000000_a1b2c3",
+  "target_url": "[https://example.com/dashboard](https://example.com/dashboard)",
+  "mode": "navigate | form | replay | ajax_fallback | download",
+  "http_method": "GET",
+  "content_type": "",
+  "body_base64": "",
+  "custom_headers": {
+    "Referer": "[https://example.com/](https://example.com/)",
+    "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7"
+  },
+  "viewport": {"width": 1366, "height": 768},
+  "actions": [
+    {
+      "type": "fill | click | select | check | press | wait | scroll",
+      "selector": "css_selector",
+      "xpath": "//button[@id='login']",
+      "text_hint": "Sign In",
+      "value": "text_to_type_or_option",
+      "checked": true,
+      "key": "Enter",
+      "x": 450,
+      "y": 320,
+      "wait_after_ms": 1000
+    }
+  ],
+  "intercepted_ajax": {
+    "captured": false,
+    "url": "",
+    "method": "POST",
+    "headers": {},
+    "body_base64": ""
+  },
+  "storage_state": {
+    "cookies": [],
+    "origins": [
+      {"origin": "[https://example.com](https://example.com)", "localStorage": [{"name": "k", "value": "v"}]}
+    ]
+  },
+  "session_storage": {
+    "[https://example.com](https://example.com)": {"sessionKey": "sessionVal"}
+  }
+}
+Client triggers POST /repos/{owner}/{repo}/actions/workflows/fetcher.yml/dispatches with {"ref": branch, "inputs": {"request_id": request_id}}.
+
+B. Remote Execution & Action Replay Contract (scripts/remote_runner.mjs)
+Reads requests/${REQUEST_ID}.json, launches Playwright Chromium with exact viewport (1366x768), restores storage_state (cookies + localStorage), and injects session_storage via context.addInitScript().
+
+Execution Modes:
+
+navigate / form / download: Navigates to target_url (intercepting the initial document request via context.route if http_method == "POST" or body_base64 is non-empty to inject method, content_type, and raw body bytes).
+
+replay (Remote Click Replay & Interactive Action Batch):
+
+Navigates to target_url (the page where the user recorded the actions) and waits for domcontentloaded and networkidle (with a soft timeout so streaming sites don't block).
+
+Iterates sequentially through every item in actions:
+
+Resolves target element using a resilient fallback chain:
+
+Primary selector (CSS)
+
+xpath (page.locator('xpath=' + action.xpath))
+
+Text match (page.getByText(action.text_hint))
+
+Coordinate fallback (page.mouse.click(action.x, action.y))
+
+Executes the action (fill, click, selectOption, setChecked, keyboard.press, mouse.wheel, or waitForTimeout).
+
+After each click or press("Enter"), waits intelligently for either triggered navigation, background XHR/fetch completion (page.waitForLoadState('networkidle', {timeout: 8000}).catch(() => {})), or wait_after_ms.
+
+ajax_fallback: If actions replay fails and intercepted_ajax.captured is true, replays the exact captured XHR/fetch request inside the browser context (page.evaluate with fetch) or navigates to it, updating the DOM.
+
+Page vs. File Detection:
+
+Monitors page.on('download') and non-HTML responses (Content-Disposition: attachment or binary MIME types).
+
+If File (response_type: "file"): Saves binary stream to work/download/<filename>, exports updated work/storage_state.json, and writes work/meta.json.
+
+If Webpage (response_type: "page"): Captures the live rendered DOM (including dynamically opened modals, SPA state changes, and AJAX results) into a single self-contained work/index.html (inlining all CSS, images, fonts, and SVGs via single-file-cli or an in-page Playwright DOM serializer while strictly preserving <form>, <input>, <button>, <select>, and data-* attributes). Exports updated work/storage_state.json and writes work/meta.json.
+
+work/meta.json Schema:
+
+JSON
+{
+  "request_id": "1730000000_a1b2c3",
+  "status": "success",
+  "response_type": "page",
+  "requested_url": "https://...",
+  "final_url": "https://...",
+  "http_status": 200,
+  "title": "Page Title or Filename",
+  "actions_executed": 3,
+  "download_filename": "",
+  "file_size": 0,
+  "mime_type": "text/html",
+  "error_message": ""
+}
+50MB Chunking & Release Sync Contract:
+
+Zips work/ into payload.zip.
+
+Splits payload.zip into exact 50 MiB (52428800 bytes) chunks: payload.zip.part001, payload.zip.part002, etc.
+
+Generates manifest.json with request_id, total_size, full_sha256, and parts: [{"filename": "...", "size": ..., "sha256": "..."}].
+
+Creates GitHub Release res-<request_id>, uploads all payload.zip.part* files FIRST, and uploads manifest.json LAST as the atomic completion signal.
+
+4. Sub-Agent Specifications & Implementation Tasks
+Execute Phase 1 (Agents 1, 2, 3 in parallel) followed by Phase 2 (Agent 4 for integration and verification).
+
+AGENT 1: Remote Workflow & Playwright Action/AJAX Engine
+Deliverables: .github/workflows/fetcher.yml and scripts/remote_runner.mjs
+
+Implement .github/workflows/fetcher.yml:
+
+Trigger on workflow_dispatch with input request_id.
+
+Set permissions: contents: write.
+
+Install Node.js, Playwright (chromium), single-file-cli, zip, coreutils (split, sha256sum), and GitHub CLI (gh).
+
+Run node scripts/remote_runner.mjs.
+
+Remove requests/${{ inputs.request_id }}.json from the repository (git pull --rebase && git rm -f ... && git commit && git push).
+
+Package work/ into payload.zip, split into 50MB chunks (split -b 50m -d -a 3), generate manifest.json, create release res-${{ inputs.request_id }}, upload chunks first, and upload manifest.json last.
+
+Implement scripts/remote_runner.mjs:
+
+Full implementation of the Section 3.B contract (Session hydration, navigate / form / replay / ajax_fallback / download modes, multi-strategy selector resolution, DOM snapshot serialization preserving interactive elements, and error fallback HTML generation so the workflow never fails without producing a valid payload.zip).
+
+AGENT 2: Local Session Manager & 50MB Chunked Transport Engine
+Deliverables: client/__init__.py, client/session_manager.py, and client/transport.py
+
+Implement client/session_manager.py (SessionManager):
+
+Saves/loads cookies, origins (localStorage), and session_storage at ~/.gh_offline_browser/session_state.json.
+
+Methods: get_envelope_state(), update_from_remote(storage_state_path), merge_client_delta(origin, local_storage_dict, session_storage_dict, cookie_str), clear_session().
+
+Implement client/transport.py (GitHubTransport & FetchResult):
+
+fetch(self, target_url: str, mode: str = "navigate", method: str = "GET", content_type: str = "", body_bytes: bytes = b"", actions: list[dict] | None = None, intercepted_ajax: dict | None = None, custom_headers: dict | None = None, status_callback: Callable[[str], None] | None = None) -> FetchResult
+
+Converts plain search words into default_search_url queries when mode == "navigate".
+
+Uploads requests/{request_id}.json, triggers workflow_dispatch, and polls /releases/tags/res-{request_id} until manifest.json appears.
+
+Downloads each payload.zip.part* with HTTP Range Resume (Range: bytes=...), up to 5 automatic retries per chunk, SHA-256 verification per chunk and full archive, live progress reporting via status_callback, extraction, session state update, moving downloaded files to Downloads/GitHubBrowser/, and deleting the remote release + tag after completion.
+
+AGENT 3: Local Browser Shell, Action Queue UI & Deep JS/AJAX Interceptor
+Deliverables: client/browser_ui.py
+
+Implement OfflineBrowserUI(transport: GitHubTransport, session_manager: SessionManager):
+
+Top Browser Toolbar:
+
+Navigation controls: Back, Forward (instant local history stack), Reload, Home, Smart URL/Search Bar, "ارسال / Go" button.
+
+Interactive Mode Toggle (حالت مستقیم vs. حالت ضبط زنجیره‌ای - Batch Mode):
+
+When Direct Mode is active: Clicking a link, submitting a form, or clicking an interactive JS button immediately sends any buffered input changes + the click/submit to GitHub.
+
+When Batch Mode (ضبط زنجیره‌ای) is active: User interactions (click, fill, select, check, press Enter) are recorded into a visual Action Queue Bar showing step badges (e.g., 1. کلیک روی #login-tab -> 2. تایپ در input[name=user] -> 3. کلیک روی دکمه ورود) with buttons to "اجرای زنجیره در گیت‌هاب (Run Batch)", "حذف آخرین گام (Undo)", and "پاک کردن صف (Clear)".
+
+Session & Download controls: "پوشه دانلودها" button and "پاکسازی کوکی و نشست" button.
+
+Injected Deep JavaScript Interceptor (Capture Phase true + Monkey-Patching):
+
+Unique Selector Generator: Write a JS helper buildDescriptor(el, event) that computes a primary CSS selector, an XPath, innerText.slice(0, 50), and viewport (x, y) coordinates scaled to 1366x768.
+
+Automatic Input Tracking (input, change): Whenever the user types in an <input>, <textarea>, or changes a <select> / checkbox, record/update a fill / select / check action for that element in the page's pending action buffer.
+
+Link & Form Interception (click, submit, keydown Enter in Capture Phase):
+
+Standard <a href>: In Direct Mode, navigate immediately (or queue a click action if in Batch Mode).
+
+Standard <form>: In Direct Mode, if no custom SPA JS prevented it or if it's a classic search/login form, serialize GET query params or POST (urlencoded / multipart) body; OR if the user is in Batch Mode, record the input fill steps + submit button click into the Action Queue.
+
+JS Button & SPA Click Replay (click in Capture Phase):
+
+If the user clicks a <button>, [role="button"], [onclick], <summary>, tab element, or any clickable non-link element, record the click descriptor (selector, xpath, text_hint, x, y). In Direct Mode, dispatch mode="replay" with all buffered input fill actions + this click action to Python via window.pywebview.api. In Batch Mode, append to the visual Action Queue and highlight the clicked element with a subtle badge so the user gets immediate visual feedback.
+
+AJAX (window.fetch & XMLHttpRequest) Trap:
+
+Override window.fetch and XMLHttpRequest.prototype.open/send.
+
+If page scripts attempt an outbound network request offline, intercept it, prevent unhandled console rejection crashes, capture {url, method, headers, body_base64}, and pass it along with the active actions buffer to window.pywebview.api.dispatch_replay(...).
+
+AGENT 4: System Integrator, Config & Persian Documentation (Phase 2)
+Deliverables: client/config.py, main.py, requirements.txt, README.md
+
+Audit .github/workflows/fetcher.yml, scripts/remote_runner.mjs, client/session_manager.py, client/transport.py, and client/browser_ui.py to guarantee that JSON keys, chunk filenames (part001, part002...), and Python method signatures match 100%.
+
+Implement client/config.py and main.py (including a rich built-in Offline Start Page with quick search boxes for Google, DuckDuckGo, Wikipedia, GitHub, and a guide on using Direct Mode vs. Batch Action Queue Mode).
+
+Write a complete Persian README.md detailing setup, PAT token scopes, session persistence, SPA/AJAX replay, Batch Mode usage, and 50MB chunked downloads.
+
+
+<ElicitationsGroup message="در صورت تمایل به افزودن قابلیت‌های امنیتی یا کاربردی ویژه قبل از اجرا:">
+  <Elicitation label="افزودن عکس‌برداری زنده (Screenshot) از مراحل اجرای Batch در گیت‌هاب" query="به مستر پرامپت قابلیتی اضافه کن که در حالت Batch Mode، بعد از اجرای هر گام در Playwright یک اسکرین‌شات کوچک هم داخل بسته پاسخ بگذارد تا کاربر ببیند در هر مرحله چه اتفاقی افتاده است."/>
+  <Elicitation label="افزودن رمزنگاری سرتاسری (AES-256-GCM) برای امنیت کامل داده‌ها" query="یک لایه رمزنگاری AES-256-GCM به مستر پرامپت اضافه کن تا فایل‌های پاکت درخواست (شامل پسوردها و کوکی‌ها) و تکه‌های ۵۰ مگابایتی پاسخ در گیت‌هاب کاملاً رمزنگاری شوند."/>
+  <Elicitation label="پشتیبانی از دانلود مستقیم ویدئوهای یوتیوب و استریم‌ها با yt-dlp" query="به مستر پرامپت قابلیت تشخیص خودکار لینک‌های یوتیوب و مدیا با yt-dlp را اضافه کن تا ویدئوها را با کیفیت دلخواه دانلود و در تکه‌های ۵۰ مگابایتی به کلاینت بفرستد."/>
+</ElicitationsGroup>
