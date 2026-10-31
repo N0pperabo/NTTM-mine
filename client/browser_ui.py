@@ -63,6 +63,10 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                     mime = f"image/{file_path.suffix.lstrip('.')}"
                 self.send_header("Content-Type", mime)
                 self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header(
+                    "Content-Security-Policy",
+                    "default-src 'self' 'unsafe-inline' data: blob: http://127.0.0.1:*; connect-src 'none'; form-action 'none';",
+                )
                 self.end_headers()
                 with open(file_path, "rb") as f:
                     self.wfile.write(f.read())
@@ -752,7 +756,7 @@ class OfflineBrowserUI:
 
   <!-- Content Frame -->
   <div class="frame-container">
-    <iframe id="content-frame" src="/start"></iframe>
+    <iframe id="content-frame" src="/start" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
   </div>
 
   <!-- Toast Notification -->

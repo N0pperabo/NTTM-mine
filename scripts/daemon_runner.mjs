@@ -671,12 +671,30 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map()) {
           else opt.removeAttribute('selected');
         });
       });
-      let baseEl = document.querySelector('base');
-      if (!baseEl) {
-        baseEl = document.createElement('base');
-        document.head.insertBefore(baseEl, document.head.firstChild);
-      }
-      baseEl.setAttribute('href', base);
+      // Convert all link hrefs to absolute URLs and force target to _self
+      document.querySelectorAll('a').forEach((a) => {
+        try {
+          if (a.href) a.setAttribute('href', a.href);
+          a.setAttribute('target', '_self');
+        } catch (e) {}
+      });
+
+      // Convert all form actions to absolute URLs
+      document.querySelectorAll('form').forEach((f) => {
+        try {
+          if (f.action) f.setAttribute('action', f.action);
+        } catch (e) {}
+      });
+
+      // Neutralize scripts so client WebView2 NEVER executes external tracking or live AJAX
+      document.querySelectorAll('script').forEach((s) => {
+        s.setAttribute('type', 'text/plain');
+        s.removeAttribute('src');
+      });
+
+      // Remove base tag to completely isolate client WebView2 from external domains
+      document.querySelectorAll('base').forEach((b) => b.remove());
+
       const docType = document.doctype ? `<!DOCTYPE ${document.doctype.name}>` : '<!DOCTYPE html>';
       return `${docType}\n${document.documentElement.outerHTML}`;
     } catch (e) {
