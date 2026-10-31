@@ -22,6 +22,7 @@ class BrowserConfig:
     poll_interval_seconds: float = 3.0
     timeout_seconds: int = 240
     downloads_dir: str = ""
+    encryption_key: str = ""
 
     def __post_init__(self):
         if not self.downloads_dir:
@@ -59,6 +60,7 @@ class BrowserConfig:
                 poll_interval_seconds=data.get("poll_interval_seconds", 3.0),
                 timeout_seconds=data.get("timeout_seconds", 240),
                 downloads_dir=data.get("downloads_dir", ""),
+                encryption_key=data.get("encryption_key", ""),
             )
         except Exception as e:
             logger.warning(f"Failed to read config file: {e}. Returning default config.")

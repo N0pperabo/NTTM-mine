@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { decryptBytes, encryptBytes, isEncrypted } from './crypto_utils.mjs';
 import { execSync } from 'node:child_process';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
@@ -9,6 +10,7 @@ const IDLE_TIMEOUT_MIN = parseFloat(process.env.IDLE_TIMEOUT_MINUTES || '30');
 const MAX_RUN_HOURS = parseFloat(process.env.MAX_HOURS || '5.5');
 const AUTO_CHAIN = (process.env.AUTO_CHAIN || 'true').toLowerCase() === 'true';
 const BRANCH = process.env.BRANCH || 'main';
+const ENCRYPTION_KEY = (process.env.ENCRYPTION_KEY || '').trim();
 
 const API_BASE = 'https://api.github.com';
 const POLL_INTERVAL_MS = 2000;
@@ -157,16 +159,26 @@ async function main() {
         // Fetch request envelope
         let requestData = null;
         try {
-          const reqRes = await fetch(item.download_url || item.url, { headers: getHeaders() });
+          let rawBuffer;
           if (item.download_url) {
-            requestData = await reqRes.json();
+            const reqRes = await fetch(item.download_url, { headers: getHeaders() });
+            rawBuffer = Buffer.from(await reqRes.arrayBuffer());
           } else {
-            const fileMeta = await reqRes.json();
-            const decoded = Buffer.from(fileMeta.content, 'base64').toString('utf8');
-            requestData = JSON.parse(decoded);
+            const fileMeta = await (await fetch(item.url, { headers: getHeaders() })).json();
+            rawBuffer = Buffer.from(fileMeta.content, 'base64');
           }
+
+          let jsonText;
+          if (isEncrypted(rawBuffer)) {
+            console.log('[Daemon] 🔒 Request envelope is encrypted with AES-256-GCM. Decrypting...');
+            const dec = decryptBytes(rawBuffer, ENCRYPTION_KEY);
+            jsonText = dec.toString('utf8');
+          } else {
+            jsonText = rawBuffer.toString('utf8');
+          }
+          requestData = JSON.parse(jsonText);
         } catch (err) {
-          console.error(`[Daemon] Error loading request envelope: ${err.message}`);
+          console.error(`[Daemon] Error loading or decrypting request envelope: ${err.message}`);
           await deleteRequestFile(item.path, item.sha);
           continue;
         }
@@ -430,15 +442,37 @@ async function packageAndRelease(requestId, workDir) {
   fs.readdirSync(cwd).filter((f) => f.startsWith('payload.zip.part')).forEach((f) => fs.unlinkSync(path.join(cwd, f)));
 
   // Zip work directory
-  execSync(`cd "${workDir}" && zip -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+  if (process.platform === 'win32') {
+    execSync(`powershell -Command "Compress-Archive -Path '${workDir}/*' -DestinationPath '${payloadZip}' -Force"`, { stdio: 'ignore' });
+  } else {
+    execSync(`cd "${workDir}" && zip -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+  }
 
-  // Split into 50MB chunks
-  execSync(`split -b 52428800 -d --numeric-suffixes=1 -a 3 "${payloadZip}" payload.zip.part`, { stdio: 'ignore' });
+  // Encrypt payload.zip (pages, sessions, and downloaded files) with AES-256-GCM if ENCRYPTION_KEY is set
+  let zipBuffer = fs.readFileSync(payloadZip);
+  if (ENCRYPTION_KEY) {
+    console.log('[Daemon] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
+    const encZip = encryptBytes(zipBuffer, ENCRYPTION_KEY);
+    fs.writeFileSync(payloadZip, encZip);
+    zipBuffer = encZip;
+    console.log('[Daemon] ✅ Payload encrypted successfully! Size:', zipBuffer.length);
+  }
+
+  // Split into 50MB chunks (pure Node.js)
+  const CHUNK_SIZE = 52428800;
+  let partIndex = 1;
+  const partFiles = [];
+  for (let offset = 0; offset < zipBuffer.length; offset += CHUNK_SIZE) {
+    const chunk = zipBuffer.subarray(offset, Math.min(offset + CHUNK_SIZE, zipBuffer.length));
+    const partName = `payload.zip.part${String(partIndex).padStart(3, '0')}`;
+    fs.writeFileSync(path.join(cwd, partName), chunk);
+    partFiles.push(partName);
+    partIndex++;
+  }
 
   // Generate manifest
-  const fullBuf = fs.readFileSync(payloadZip);
+  const fullBuf = zipBuffer;
   const fullSha256 = crypto.createHash('sha256').update(fullBuf).digest('hex');
-  const partFiles = fs.readdirSync(cwd).filter((f) => f.startsWith('payload.zip.part')).sort();
   const parts = partFiles.map((p) => {
     const b = fs.readFileSync(path.join(cwd, p));
     return {

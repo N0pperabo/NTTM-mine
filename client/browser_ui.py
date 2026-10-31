@@ -682,6 +682,10 @@ class OfflineBrowserUI:
         <label>موتور جستجوی پیش‌فرض:</label>
         <input type="text" id="cfg-search" value="https://www.google.com/search?q={query}" />
       </div>
+      <div class="form-group">
+        <label>کلید رمزنگاری سرتاسری (AES-256-GCM) - ویژه مخازن پابلیک:</label>
+        <input type="password" id="cfg-enc" placeholder="کلید دلخواه (باید با Secret مخزن به نام ENCRYPTION_KEY یکسان باشد)" />
+      </div>
       <div class="modal-buttons">
         <button class="action-btn" onclick="window.shellApp.closeSettings()">انصراف</button>
         <button class="btn-go" onclick="window.shellApp.saveSettings()">ذخیره تنظیمات</button>
@@ -861,6 +865,7 @@ class OfflineBrowserUI:
           document.getElementById('cfg-repo').value = cfg.github_repo || '';
           document.getElementById('cfg-branch').value = cfg.branch || 'main';
           document.getElementById('cfg-search').value = cfg.default_search_url || '';
+          document.getElementById('cfg-enc').value = cfg.encryption_key || '';
           document.getElementById('settings-modal').classList.add('open');
         });
       }
@@ -874,8 +879,9 @@ class OfflineBrowserUI:
         const repo = document.getElementById('cfg-repo').value.trim();
         const branch = document.getElementById('cfg-branch').value.trim() || 'main';
         const searchUrl = document.getElementById('cfg-search').value.trim();
+        const encKey = document.getElementById('cfg-enc').value.trim();
 
-        window.pywebview.api.save_config(token, repo, branch, searchUrl).then((ok) => {
+        window.pywebview.api.save_config(token, repo, branch, searchUrl, encKey).then((ok) => {
           if (ok) {
             this.showToast('تنظیمات با موفقیت ذخیره شد.');
             this.closeSettings();
@@ -1271,7 +1277,7 @@ class WebviewApiBridge:
             return {"alive": True, "msg": "درخواست راه‌اندازی رانر زنده ارسال شد. ظرف ۳۰ الی ۴۵ ثانیه آماده می‌شود..."}
 
     def save_config(
-        self, token: str, repo: str, branch: str, search_url: str
+        self, token: str, repo: str, branch: str, search_url: str, encryption_key: str = ""
     ) -> bool:
         try:
             self.ui.config.github_token = token.strip()
@@ -1279,6 +1285,7 @@ class WebviewApiBridge:
             self.ui.config.branch = branch.strip() or "main"
             if search_url:
                 self.ui.config.default_search_url = search_url.strip()
+            self.ui.config.encryption_key = encryption_key.strip()
             self.ui.config.save()
             return True
         except Exception as e:

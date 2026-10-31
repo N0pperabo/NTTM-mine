@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { decryptBytes, isEncrypted } from './crypto_utils.mjs';
 
 async function main() {
   const requestId = process.argv[2] || process.env.REQUEST_ID;
@@ -23,11 +24,21 @@ async function main() {
   }
 
   let requestData;
+  const encryptionKey = (process.env.ENCRYPTION_KEY || '').trim();
   try {
-    requestData = JSON.parse(fs.readFileSync(requestFilePath, 'utf8'));
+    const fileBuf = fs.readFileSync(requestFilePath);
+    let jsonText;
+    if (isEncrypted(fileBuf)) {
+      console.log('[Runner] 🔒 Request envelope is encrypted with AES-256-GCM. Decrypting...');
+      const decBuf = decryptBytes(fileBuf, encryptionKey);
+      jsonText = decBuf.toString('utf8');
+    } else {
+      jsonText = fileBuf.toString('utf8');
+    }
+    requestData = JSON.parse(jsonText);
   } catch (err) {
-    console.error('Failed to parse request JSON:', err);
-    writeErrorArtifacts(workDir, requestId, `Invalid request JSON: ${err.message}`);
+    console.error('[Runner] Error parsing or decrypting request envelope:', err.message);
+    writeErrorArtifacts(workDir, requestId, `Invalid or encrypted request: ${err.message}`);
     return;
   }
 
@@ -45,7 +56,7 @@ async function main() {
     session_storage = null
   } = requestData;
 
-  console.log(`[Runner] Processing request ${requestId} for URL: ${target_url} in mode: ${mode}`);
+  console.log(`[Runner] Processing request ${requestId} in mode: ${mode}`);
 
   let browser;
   let downloadedFile = null;

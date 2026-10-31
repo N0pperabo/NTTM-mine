@@ -38,6 +38,7 @@ jobs:
           REQUEST_ID: ${{ inputs.request_id }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           node scripts/remote_runner.mjs "${{ inputs.request_id }}"
 
@@ -48,52 +49,17 @@ jobs:
           git pull --rebase origin ${{ github.ref_name }} || true
           if [ -f "requests/${{ inputs.request_id }}.json" ]; then
             git rm -f "requests/${{ inputs.request_id }}.json"
-            git commit -m "Cleanup request ${{ inputs.request_id }}" || true
+            git commit -m "chore: sync request state" || true
             git push origin ${{ github.ref_name }} || true
           fi
 
-      - name: Package payload & split into 50MB chunks
+      - name: Package, Encrypt & Split into 50MB Chunks
         id: package_step
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          mkdir -p work
-          cd work
-          zip -r ../payload.zip .
-          cd ..
-
-          # Split into 50MB chunks (52,428,800 bytes) with part001, part002... naming
-          split -b 52428800 -d --numeric-suffixes=1 -a 3 payload.zip payload.zip.part
-
-          # Generate manifest.json
-          node -e '
-          const fs = require("fs");
-          const crypto = require("crypto");
-
-          const requestId = "${{ inputs.request_id }}";
-          const fullFile = "payload.zip";
-          const fullBuf = fs.readFileSync(fullFile);
-          const fullSha256 = crypto.createHash("sha256").update(fullBuf).digest("hex");
-          const totalSize = fullBuf.length;
-
-          const partFiles = fs.readdirSync(".").filter(f => f.startsWith("payload.zip.part")).sort();
-          const parts = partFiles.map(partName => {
-            const buf = fs.readFileSync(partName);
-            return {
-              filename: partName,
-              size: buf.length,
-              sha256: crypto.createHash("sha256").update(buf).digest("hex")
-            };
-          });
-
-          const manifest = {
-            request_id: requestId,
-            total_size: totalSize,
-            full_sha256: fullSha256,
-            parts: parts
-          };
-
-          fs.writeFileSync("manifest.json", JSON.stringify(manifest, null, 2));
-          console.log("Manifest generated with " + parts.length + " part(s).");
-          '
+          node scripts/pack_payload.mjs "${{ inputs.request_id }}"
 
       - name: Create Release and Upload Chunks then Manifest
         env:
@@ -102,11 +68,11 @@ jobs:
           TAG="res-${{ inputs.request_id }}"
           
           # Delete existing release/tag if retry
-          gh release delete "$TAG" --yes || true
-          git push --delete origin "$TAG" || true
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push --delete origin "$TAG" 2>/dev/null || true
 
-          echo "Creating release $TAG and uploading chunks first..."
-          gh release create "$TAG" payload.zip.part* --title "Response $TAG" --notes "Payload response for request ${{ inputs.request_id }}"
+          echo "Creating release $TAG and uploading chunks..."
+          gh release create "$TAG" payload.zip.part* --title "Package $TAG" --notes "Encrypted release payload"
 
           echo "Uploading manifest.json as atomic completion signal..."
           gh release upload "$TAG" manifest.json

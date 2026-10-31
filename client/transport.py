@@ -16,6 +16,7 @@ import requests
 
 from .config import BrowserConfig
 from .session_manager import SessionManager
+from .crypto import encrypt_bytes, decrypt_bytes, is_encrypted
 
 logger = logging.getLogger("GitHubTransport")
 
@@ -239,6 +240,22 @@ class GitHubTransport:
                         error_message="مغایرت چک‌سام SHA-256 فایل تجمیع‌شده با مانیفست رانر.",
                     )
 
+            # Decrypt payload.zip if encrypted with AES-256-GCM
+            with open(assembled_zip_path, "rb") as f:
+                assembled_bytes = f.read()
+
+            if is_encrypted(assembled_bytes):
+                update_status("در حال رمزگشایی بسته پاسخ با کلید اختصاصی AES-256-GCM...")
+                try:
+                    decrypted_zip = decrypt_bytes(assembled_bytes, self.config.encryption_key)
+                    with open(assembled_zip_path, "wb") as f:
+                        f.write(decrypted_zip)
+                except Exception as dec_err:
+                    return FetchResult(
+                        success=False,
+                        error_message=f"خطا در رمزگشایی بسته دریافتی با کلید امنیتی: {dec_err}",
+                    )
+
             # 8. Unzip payload
             update_status("در حال استخراج محتوای وب...")
             extracted_dir = cache_req_dir / "extracted"
@@ -322,7 +339,11 @@ class GitHubTransport:
         owner, repo = self._parse_repo()
         url = f"{self.api_base}/repos/{owner}/{repo}/contents/requests/{request_id}.json"
 
-        content_bytes = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
+        raw_json_bytes = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
+        if self.config.encryption_key:
+            content_bytes = encrypt_bytes(raw_json_bytes, self.config.encryption_key)
+        else:
+            content_bytes = raw_json_bytes
         content_b64 = base64.b64encode(content_bytes).decode("utf-8")
 
         payload = {

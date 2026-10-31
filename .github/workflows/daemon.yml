@@ -50,6 +50,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           IDLE_TIMEOUT_MINUTES: ${{ inputs.idle_timeout_minutes || '30' }}
           MAX_HOURS: ${{ inputs.max_hours || '5.5' }}
           AUTO_CHAIN: ${{ inputs.auto_chain || 'true' }}
