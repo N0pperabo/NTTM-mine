@@ -9,7 +9,11 @@ async function handleCloudflareChallenge(page) {
       title.includes('checking your browser') ||
       title.includes('attention required') ||
       title.includes('ddos-guard') ||
-      title.includes('security check');
+      title.includes('security check') ||
+      title.includes('چند لحظه صبر کنید') ||
+      title.includes('یک لحظه صبر کنید') ||
+      title.includes('در حال بررسی') ||
+      title.includes('لطفا صبر کنید');
 
     const hasCfElement = await page.evaluate(() => {
       try {
@@ -110,12 +114,32 @@ async function handleCloudflareChallenge(page) {
         currentTitle.includes('just a moment') ||
         currentTitle.includes('checking your browser') ||
         currentTitle.includes('attention required') ||
-        currentTitle.includes('security check');
+        currentTitle.includes('security check') ||
+        currentTitle.includes('ddos-guard') ||
+        currentTitle.includes('چند لحظه صبر کنید') ||
+        currentTitle.includes('یک لحظه صبر کنید') ||
+        currentTitle.includes('در حال بررسی') ||
+        currentTitle.includes('لطفا صبر کنید');
 
-      if (!stillInCf) {
-        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loaded: "${await page.title().catch(() => '')}"`);
-        await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
-        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+      let stillHasElement = false;
+      try {
+        stillHasElement = await page.evaluate(() => {
+          return !!(
+            document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+            document.querySelector('iframe[src*="challenge-platform"]') ||
+            document.querySelector('#challenge-stage') ||
+            document.querySelector('#challenge-running') ||
+            document.querySelector('#challenge-form')
+          );
+        }).catch(() => false);
+      } catch (e) {}
+
+      if (!stillInCf && !stillHasElement) {
+        console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loading: "${await page.title().catch(() => '')}"`);
+        console.log('[Runner] ⏳ Waiting for destination page navigation to settle...');
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+        await page.waitForTimeout(2000);
         return true;
       }
     }
@@ -636,7 +660,26 @@ async function main() {
     // Save webpage if not a file download
     if (!downloadedFile) {
       console.log('[Runner] Serializing rendered DOM snapshot...');
-      let serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+      let serializedHtml = '';
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+          finalUrl = page.url() || target_url;
+          serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+          break;
+        } catch (evalErr) {
+          if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
+            console.log(`[Runner] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
+            await page.waitForTimeout(3000);
+            await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+            finalUrl = page.url() || target_url;
+            pageTitle = await page.title().catch(() => '');
+            continue;
+          }
+          throw evalErr;
+        }
+      }
       serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
