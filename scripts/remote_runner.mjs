@@ -1,3 +1,26 @@
+// Auto-scroll page to trigger lazy-loaded images (e.g. comic covers)
+async function autoScrollPage(page) {
+  try {
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 400;
+        const timer = setInterval(() => {
+          const scrollHeight = document.body.scrollHeight || 3000;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+          if (totalHeight >= scrollHeight || totalHeight >= 4500) {
+            clearInterval(timer);
+            window.scrollTo(0, 0);
+            resolve();
+          }
+        }, 100);
+      });
+    });
+    await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+  } catch (e) {}
+}
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { decryptBytes, isEncrypted } from './crypto_utils.mjs';
@@ -53,7 +76,8 @@ async function main() {
     actions = [],
     intercepted_ajax = null,
     storage_state = null,
-    session_storage = null
+    session_storage = null,
+    custom_delay_seconds = 0
   } = requestData;
 
   console.log(`[Runner] Processing request ${requestId} in mode: ${mode}`);
@@ -119,6 +143,21 @@ async function main() {
     }
 
     const page = await context.newPage();
+
+    // Cache all loaded image buffers to embed into offline HTML (for comic covers, avatars, etc.)
+    const imageMap = new Map();
+    page.on('response', async (res) => {
+      try {
+        const url = res.url();
+        const ct = res.headers()['content-type'] || '';
+        if (ct.startsWith('image/')) {
+          const buffer = await res.body();
+          if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
+            imageMap.set(url, `data:${ct};base64,${buffer.toString('base64')}`);
+          }
+        }
+      } catch (e) {}
+    });
 
     // Listen for file downloads
     page.on('download', async (download) => {
@@ -303,6 +342,16 @@ async function main() {
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     }
 
+    // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
+    await autoScrollPage(page);
+
+    // Apply custom delay if requested (e.g. for captchas, Cloudflare turnstile, dynamic rendering)
+    if (custom_delay_seconds > 0) {
+      console.log(`[Runner] Waiting custom delay of ${custom_delay_seconds} seconds before capture...`);
+      await page.waitForTimeout(custom_delay_seconds * 1000);
+      await autoScrollPage(page);
+    }
+
     // Wait a brief moment for any pending download event to register
     await page.waitForTimeout(1000);
 
@@ -320,7 +369,7 @@ async function main() {
     // Save webpage if not a file download
     if (!downloadedFile) {
       console.log('[Runner] Serializing rendered DOM snapshot...');
-      const serializedHtml = await serializeRenderedPage(page, finalUrl);
+      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
@@ -428,9 +477,49 @@ async function executeAjaxFallback(page, ajax) {
 }
 
 // DOM Serializer strictly preserving inputs, buttons, selects, forms and data-* attributes
-async function serializeRenderedPage(page, baseUrl) {
-  return await page.evaluate((base) => {
+async function serializeRenderedPage(page, baseUrl, imageMap) {
+  const imagesList = Array.from(imageMap.entries());
+  return await page.evaluate(({ base, images }) => {
     try {
+      const imgLookup = new Map(images);
+
+      // Unpack lazy loading data attributes (e.g. on comic/manga/media websites)
+      document.querySelectorAll('img, picture source').forEach((el) => {
+        const lazySrc = el.getAttribute('data-src') || el.getAttribute('data-original') || el.getAttribute('data-lazy-src') || el.getAttribute('srcset');
+        if (lazySrc && (!el.getAttribute('src') || el.getAttribute('src').startsWith('data:image/svg') || el.getAttribute('src').includes('blank'))) {
+          el.setAttribute('src', lazySrc.split(' ')[0]);
+        }
+      });
+
+      // Inline images with captured Base64 data URLs
+      document.querySelectorAll('img').forEach((img) => {
+        const src = img.src;
+        if (imgLookup.has(src)) {
+          img.src = imgLookup.get(src);
+        } else {
+          // If not in map, try canvas conversion if complete
+          try {
+            if (img.complete && img.naturalWidth > 0 && !img.src.startsWith('data:')) {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              img.src = canvas.toDataURL('image/jpeg', 0.85);
+            }
+          } catch (e) {}
+        }
+      });
+
+      // Inline background images in CSS styles
+      document.querySelectorAll('*[style*="background"]').forEach((el) => {
+        const style = el.getAttribute('style') || '';
+        const match = style.match(/url\(['"]?(https?:\/\/[^'"]+)['"]?\)/i);
+        if (match && imgLookup.has(match[1])) {
+          el.style.backgroundImage = `url("${imgLookup.get(match[1])}")`;
+        }
+      });
+
       // 1. Preserve input, textarea, and select live values into attributes
       document.querySelectorAll('input').forEach((input) => {
         if (input.type === 'checkbox' || input.type === 'radio') {
@@ -475,7 +564,7 @@ async function serializeRenderedPage(page, baseUrl) {
     } catch (e) {
       return document.documentElement.outerHTML;
     }
-  }, baseUrl);
+  }, { base: baseUrl, images: imagesList });
 }
 
 // Check for common binary/download MIME types

@@ -88,6 +88,7 @@ class GitHubTransport:
         actions: Optional[List[Dict[str, Any]]] = None,
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_headers: Optional[Dict[str, str]] = None,
+        custom_delay_seconds: int = 0,
         status_callback: Optional[Callable[[str], None]] = None,
     ) -> FetchResult:
         """
@@ -132,6 +133,7 @@ class GitHubTransport:
                 "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7",
             },
             "viewport": {"width": 1366, "height": 768},
+            "custom_delay_seconds": custom_delay_seconds,
             "actions": actions or [],
             "intercepted_ajax": intercepted_ajax
             or {

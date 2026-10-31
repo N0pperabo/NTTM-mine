@@ -137,7 +137,7 @@ class OfflineBrowserUI:
 
     # ---------------- UI Action Handlers ----------------
 
-    def dispatch_navigate(self, target_url: str):
+    def dispatch_navigate(self, target_url: str, custom_delay_seconds: int = 0):
         """Handles URL bar or link navigation."""
         if self.is_busy:
             self._notify_ui("سیستم در حال حاضر مشغول پردازش درخواست قبلی است.")
@@ -153,6 +153,7 @@ class OfflineBrowserUI:
             res = self.transport.fetch(
                 target_url=target_url,
                 mode="navigate",
+                custom_delay_seconds=custom_delay_seconds,
                 status_callback=on_status,
             )
             self._handle_fetch_result(res, target_url)
@@ -162,7 +163,7 @@ class OfflineBrowserUI:
         threading.Thread(target=task, daemon=True).start()
 
     def dispatch_form_submit(
-        self, action_url: str, method: str, content_type: str, body_base64: str
+        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
     ):
         """Handles form submission."""
         if self.is_busy:
@@ -181,6 +182,7 @@ class OfflineBrowserUI:
                 method=method,
                 content_type=content_type,
                 body_bytes=body_bytes,
+                custom_delay_seconds=custom_delay_seconds,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, action_url)
@@ -194,6 +196,7 @@ class OfflineBrowserUI:
         target_url: str,
         actions: List[Dict[str, Any]],
         intercepted_ajax: Optional[Dict[str, Any]] = None,
+        custom_delay_seconds: int = 0,
     ):
         """Handles single or batch replay execution."""
         if self.is_busy:
@@ -213,6 +216,7 @@ class OfflineBrowserUI:
                 mode=mode,
                 actions=actions,
                 intercepted_ajax=intercepted_ajax,
+                custom_delay_seconds=custom_delay_seconds,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, target_url or self.current_url)
@@ -457,6 +461,57 @@ class OfflineBrowserUI:
     }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
+    /* Custom Delay Controls */
+    .delay-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-dark);
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .delay-container.active {
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.15);
+    }
+    .delay-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-size: 13px;
+      user-select: none;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    .delay-container.active .delay-btn {
+      color: #fbbf24;
+      font-weight: 600;
+    }
+    .delay-input-box {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-right: 1px solid var(--border);
+      padding-right: 6px;
+      margin-right: 2px;
+    }
+    .delay-input-box input {
+      width: 44px;
+      background: var(--bg-card);
+      border: 1px solid #475569;
+      color: #fbbf24;
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      text-align: center;
+      outline: none;
+      direction: ltr;
+    }
+
     /* Quick Action Buttons */
     .action-btn {
       background: var(--bg-dark);
@@ -630,6 +685,18 @@ class OfflineBrowserUI:
       <span id="daemon-label">⚡ رانر زنده: در حال بررسی...</span>
     </div>
 
+    <!-- Custom Delay Toggle (Auto-resets after each fetch) -->
+    <div id="delay-container" class="delay-container">
+      <div id="delay-btn" class="delay-btn" onclick="window.shellApp.toggleDelay()" title="تأخیر اختصاصی در رانر برای لود کامل کپچا و صفحات سنگین (پیش‌فرض ۱۵ ثانیه)">
+        <span>⏱️</span>
+        <span id="delay-status-text">تأخیر: خاموش</span>
+      </div>
+      <div id="delay-input-box" class="delay-input-box" style="display: none;">
+        <input type="number" id="delay-seconds-input" min="1" max="180" value="15" title="ثانیه تأخیر در رانر" />
+        <span style="font-size: 11px; color: #94a3b8;">ثانیه</span>
+      </div>
+    </div>
+
     <button class="action-btn" title="پوشه فایل‌های دانلود شده" onclick="window.pywebview.api.open_downloads_folder()">📁 دانلودها</button>
     <button class="action-btn" title="پاکسازی کوکی‌ها و سشن ذخیره شده" onclick="window.pywebview.api.clear_session()">🧹 پاکسازی نشست</button>
     <button class="action-btn" title="تنظیمات مخزن و توکن گیت‌هاب" onclick="window.shellApp.openSettings()">⚙️ تنظیمات</button>
@@ -708,6 +775,7 @@ class OfflineBrowserUI:
 
         this.isBatchMode = false;
         this.actionQueue = [];
+        this.delayEnabled = false;
         this.currentLiveUrl = '';
 
         this.init();
@@ -764,7 +832,7 @@ class OfflineBrowserUI:
       onGoClick() {
         const val = this.urlBar.value.trim();
         if (val) {
-          window.pywebview.api.navigate(val);
+          window.pywebview.api.navigate(val, this.getDelaySeconds());
         }
       }
 
@@ -816,12 +884,45 @@ class OfflineBrowserUI:
         });
       }
 
+      toggleDelay() {
+        this.delayEnabled = !this.delayEnabled;
+        const container = document.getElementById('delay-container');
+        const statusText = document.getElementById('delay-status-text');
+        const inputBox = document.getElementById('delay-input-box');
+
+        if (this.delayEnabled) {
+          container.classList.add('active');
+          statusText.textContent = 'تأخیر: روشن';
+          inputBox.style.display = 'flex';
+          const sec = document.getElementById('delay-seconds-input').value || 15;
+          this.showToast(`⏱️ تأخیر ${sec} ثانیه‌ای فعال شد (پس از دریافت صفحه خاموش خواهد شد)`);
+        } else {
+          this.resetDelay();
+        }
+      }
+
+      resetDelay() {
+        this.delayEnabled = false;
+        const container = document.getElementById('delay-container');
+        const statusText = document.getElementById('delay-status-text');
+        const inputBox = document.getElementById('delay-input-box');
+        if (container) container.classList.remove('active');
+        if (statusText) statusText.textContent = 'تأخیر: خاموش';
+        if (inputBox) inputBox.style.display = 'none';
+      }
+
+      getDelaySeconds() {
+        if (!this.delayEnabled) return 0;
+        const input = document.getElementById('delay-seconds-input');
+        return parseInt(input ? input.value : 15, 10) || 15;
+      }
+
       runBatch() {
         if (this.actionQueue.length === 0) {
           this.showToast('صف اکشن‌ها خالی است.', true);
           return;
         }
-        window.pywebview.api.run_batch_actions(this.currentLiveUrl, this.actionQueue);
+        window.pywebview.api.run_batch_actions(this.currentLiveUrl, this.actionQueue, this.getDelaySeconds());
         this.clearQueue();
       }
 
@@ -839,6 +940,7 @@ class OfflineBrowserUI:
       }
 
       onPageLoaded(localUrl, targetUrl, title) {
+        this.resetDelay();
         this.currentLiveUrl = targetUrl;
         if (targetUrl) {
           this.urlBar.value = targetUrl;
@@ -979,7 +1081,7 @@ class OfflineBrowserUI:
                 desc.type = 'click';
                 window.shellApp.addAction(desc);
               } else {
-                window.pywebview.api.navigate(fullUrl);
+                window.pywebview.api.navigate(fullUrl, window.shellApp.getDelaySeconds());
               }
               return;
             }
@@ -999,7 +1101,7 @@ class OfflineBrowserUI:
                 const actions = Object.values(win.__pendingInputs);
                 actions.push(desc);
                 win.__pendingInputs = {};
-                window.pywebview.api.dispatch_replay(window.shellApp.currentLiveUrl, actions, null);
+                window.pywebview.api.dispatch_replay(window.shellApp.currentLiveUrl, actions, null, window.shellApp.getDelaySeconds());
               }
             }
           }, true);
@@ -1026,11 +1128,11 @@ class OfflineBrowserUI:
             } else {
               if (method === 'GET') {
                 const delim = actionUrl.includes('?') ? '&' : '?';
-                window.pywebview.api.navigate(actionUrl + delim + params.toString());
+                window.pywebview.api.navigate(actionUrl + delim + params.toString(), window.shellApp.getDelaySeconds());
               } else {
                 const bodyStr = params.toString();
                 const bodyB64 = btoa(unescape(encodeURIComponent(bodyStr)));
-                window.pywebview.api.submit_form(actionUrl, method, 'application/x-www-form-urlencoded', bodyB64);
+                window.pywebview.api.submit_form(actionUrl, method, 'application/x-www-form-urlencoded', bodyB64, window.shellApp.getDelaySeconds());
               }
             }
           }, true);
@@ -1223,24 +1325,25 @@ class WebviewApiBridge:
     def __init__(self, ui: OfflineBrowserUI):
         self.ui = ui
 
-    def navigate(self, target_url: str):
-        self.ui.dispatch_navigate(target_url)
+    def navigate(self, target_url: str, custom_delay_seconds: int = 0):
+        self.ui.dispatch_navigate(target_url, custom_delay_seconds)
 
     def submit_form(
-        self, action_url: str, method: str, content_type: str, body_base64: str
+        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
     ):
-        self.ui.dispatch_form_submit(action_url, method, content_type, body_base64)
+        self.ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds)
 
     def dispatch_replay(
         self,
         target_url: str,
         actions: List[Dict[str, Any]],
         intercepted_ajax: Optional[Dict[str, Any]] = None,
+        custom_delay_seconds: int = 0,
     ):
-        self.ui.dispatch_replay(target_url, actions, intercepted_ajax)
+        self.ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds)
 
-    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]]):
-        self.ui.dispatch_replay(target_url, actions, None)
+    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0):
+        self.ui.dispatch_replay(target_url, actions, None, custom_delay_seconds)
 
     def open_downloads_folder(self):
         self.ui.open_downloads_folder()

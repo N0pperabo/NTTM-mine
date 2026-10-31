@@ -1,3 +1,26 @@
+// Auto-scroll page to trigger lazy-loaded images (e.g. comic covers)
+async function autoScrollPage(page) {
+  try {
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 400;
+        const timer = setInterval(() => {
+          const scrollHeight = document.body.scrollHeight || 3000;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+          if (totalHeight >= scrollHeight || totalHeight >= 4500) {
+            clearInterval(timer);
+            window.scrollTo(0, 0);
+            resolve();
+          }
+        }, 100);
+      });
+    });
+    await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+  } catch (e) {}
+}
+
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -240,7 +263,8 @@ async function processRequest(browser, requestData, requestId, workDir) {
     actions = [],
     intercepted_ajax = null,
     storage_state = null,
-    session_storage = null
+    session_storage = null,
+    custom_delay_seconds = 0
   } = requestData;
 
   const contextOptions = {
@@ -392,7 +416,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
     fs.writeFileSync(path.join(workDir, 'storage_state.json'), JSON.stringify(currentStorage, null, 2), 'utf8');
 
     if (!downloadedFile) {
-      const serializedHtml = await serializeRenderedPage(page, finalUrl);
+      const serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap);
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
@@ -590,7 +614,7 @@ async function serializeRenderedPage(page, baseUrl) {
     } catch (e) {
       return document.documentElement.outerHTML;
     }
-  }, baseUrl);
+  }, { base: baseUrl, images: imagesList });
 }
 
 function isBinaryMime(mime) {
