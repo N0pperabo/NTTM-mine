@@ -309,6 +309,21 @@ async function processRequest(browser, requestData, requestId, workDir) {
 
     const page = await context.newPage();
 
+    // Cache image buffers to embed into offline HTML (comic covers, avatars, etc.)
+    const imageMap = new Map();
+    page.on('response', async (res) => {
+      try {
+        const url = res.url();
+        const ct = res.headers()['content-type'] || '';
+        if (ct.startsWith('image/')) {
+          const buffer = await res.body();
+          if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
+            imageMap.set(url, `data:${ct};base64,${buffer.toString('base64')}`);
+          }
+        }
+      } catch (e) {}
+    });
+
     page.on('download', async (download) => {
       try {
         const filename = download.suggestedFilename() || `download_${Date.now()}`;
@@ -583,9 +598,50 @@ async function executeAjaxFallback(page, ajax) {
   } catch (err) {}
 }
 
-async function serializeRenderedPage(page, baseUrl) {
-  return await page.evaluate((base) => {
+async function serializeRenderedPage(page, baseUrl, imageMap = new Map()) {
+  const imagesList = imageMap ? Array.from(imageMap.entries()) : [];
+  return await page.evaluate(({ base, images }) => {
     try {
+      const imgLookup = new Map(images || []);
+
+      // Unpack lazy loading data attributes (e.g. on comic/manga/media websites)
+      document.querySelectorAll('img, picture source').forEach((el) => {
+        const lazySrc = el.getAttribute('data-src') || el.getAttribute('data-original') || el.getAttribute('data-lazy-src') || el.getAttribute('srcset');
+        if (lazySrc && (!el.getAttribute('src') || el.getAttribute('src').startsWith('data:image/svg') || el.getAttribute('src').includes('blank'))) {
+          el.setAttribute('src', lazySrc.split(' ')[0]);
+        }
+      });
+
+      // Inline images with captured Base64 data URLs
+      document.querySelectorAll('img').forEach((img) => {
+        const src = img.src;
+        if (imgLookup.has(src)) {
+          img.src = imgLookup.get(src);
+        } else {
+          // If not in map, try canvas conversion if complete
+          try {
+            if (img.complete && img.naturalWidth > 0 && !img.src.startsWith('data:')) {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              img.src = canvas.toDataURL('image/jpeg', 0.85);
+            }
+          } catch (e) {}
+        }
+      });
+
+      // Inline background images in CSS styles
+      document.querySelectorAll('*[style*="background"]').forEach((el) => {
+        const style = el.getAttribute('style') || '';
+        const match = style.match(/url\(['"]?(https?:\/\/[^'"]+)['"]?\)/i);
+        if (match && imgLookup.has(match[1])) {
+          el.style.backgroundImage = `url("${imgLookup.get(match[1])}")`;
+        }
+      });
+
+      // 1. Preserve input, textarea, and select live values into attributes
       document.querySelectorAll('input').forEach((input) => {
         if (input.type === 'checkbox' || input.type === 'radio') {
           if (input.checked) input.setAttribute('checked', 'checked');
