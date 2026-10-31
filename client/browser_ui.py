@@ -1323,15 +1323,16 @@ class WebviewApiBridge:
     """Python bridge exposed to JavaScript under window.pywebview.api."""
 
     def __init__(self, ui: OfflineBrowserUI):
-        self.ui = ui
+        # Must use leading underscore so pywebview does not inspect ui.window.native recursively
+        self._ui = ui
 
     def navigate(self, target_url: str, custom_delay_seconds: int = 0):
-        self.ui.dispatch_navigate(target_url, custom_delay_seconds)
+        self._ui.dispatch_navigate(target_url, custom_delay_seconds)
 
     def submit_form(
         self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
     ):
-        self.ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds)
+        self._ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds)
 
     def dispatch_replay(
         self,
@@ -1340,56 +1341,56 @@ class WebviewApiBridge:
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_delay_seconds: int = 0,
     ):
-        self.ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds)
+        self._ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds)
 
     def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0):
-        self.ui.dispatch_replay(target_url, actions, None, custom_delay_seconds)
+        self._ui.dispatch_replay(target_url, actions, None, custom_delay_seconds)
 
     def open_downloads_folder(self):
-        self.ui.open_downloads_folder()
+        self._ui.open_downloads_folder()
 
     def clear_session(self):
-        self.ui.clear_session()
+        self._ui.clear_session()
 
     def go_back(self):
-        self.ui.go_back()
+        self._ui.go_back()
 
     def go_forward(self):
-        self.ui.go_forward()
+        self._ui.go_forward()
 
     def reload(self):
-        self.ui.reload()
+        self._ui.reload()
 
     def go_home(self):
-        self.ui.go_home()
+        self._ui.go_home()
 
     def get_config(self) -> Dict[str, Any]:
-        return self.ui.config.to_dict()
+        return self._ui.config.to_dict()
 
     def get_daemon_status(self) -> Dict[str, Any]:
-        alive = self.ui.transport.is_daemon_alive()
+        alive = self._ui.transport.is_daemon_alive()
         return {"alive": alive}
 
     def toggle_daemon(self) -> Dict[str, Any]:
-        alive = self.ui.transport.is_daemon_alive()
+        alive = self._ui.transport.is_daemon_alive()
         if alive:
-            ok, msg = self.ui.transport.stop_daemon()
+            ok, msg = self._ui.transport.stop_daemon()
             return {"alive": False, "msg": "رانر زنده متوقف شد."}
         else:
-            ok, msg = self.ui.transport.start_daemon(idle_timeout_min=30)
+            ok, msg = self._ui.transport.start_daemon(idle_timeout_min=30)
             return {"alive": True, "msg": "درخواست راه‌اندازی رانر زنده ارسال شد. ظرف ۳۰ الی ۴۵ ثانیه آماده می‌شود..."}
 
     def save_config(
         self, token: str, repo: str, branch: str, search_url: str, encryption_key: str = ""
     ) -> bool:
         try:
-            self.ui.config.github_token = token.strip()
-            self.ui.config.github_repo = repo.strip()
-            self.ui.config.branch = branch.strip() or "main"
+            self._ui.config.github_token = token.strip()
+            self._ui.config.github_repo = repo.strip()
+            self._ui.config.branch = branch.strip() or "main"
             if search_url:
-                self.ui.config.default_search_url = search_url.strip()
-            self.ui.config.encryption_key = encryption_key.strip()
-            self.ui.config.save()
+                self._ui.config.default_search_url = search_url.strip()
+            self._ui.config.encryption_key = encryption_key.strip()
+            self._ui.config.save()
             return True
         except Exception as e:
             logger.error(f"Save config error: {e}")
