@@ -423,6 +423,18 @@ async function processRequest(browser, requestData, requestId, workDir) {
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     }
 
+    // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
+    await autoScrollPage(page);
+
+    // Apply custom delay if requested (e.g. for captchas, Cloudflare turnstile, dynamic rendering)
+    const delaySec = parseInt(custom_delay_seconds || 0, 10);
+    if (delaySec > 0) {
+      console.log(`[Daemon] ⏱️ Waiting custom delay of ${delaySec} seconds before capture...`);
+      await page.waitForTimeout(delaySec * 1000);
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+      await autoScrollPage(page);
+    }
+
     await page.waitForTimeout(1000);
     finalUrl = page.url() || target_url;
     pageTitle = await page.title().catch(() => '');

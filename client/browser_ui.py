@@ -99,6 +99,7 @@ class OfflineBrowserUI:
         self.is_busy: bool = False
         self.is_batch_mode: bool = False
         self.action_queue: List[Dict[str, Any]] = []
+        self.current_delay_seconds: int = 0
 
     def start_local_server(self) -> int:
         """Starts the local HTTP server on a free port."""
@@ -137,15 +138,39 @@ class OfflineBrowserUI:
 
     # ---------------- UI Action Handlers ----------------
 
+    def set_delay(self, seconds: Any):
+        try:
+            self.current_delay_seconds = max(0, int(seconds or 0))
+        except Exception:
+            self.current_delay_seconds = 0
+        logger.info(f"Custom delay set to {self.current_delay_seconds}s in Python UI state.")
+
+    def get_and_consume_delay(self, param_delay: Any = 0) -> int:
+        """Returns the delay in seconds and resets it back to 0."""
+        delay = 0
+        try:
+            delay = int(param_delay or 0)
+        except Exception:
+            delay = 0
+        if delay <= 0:
+            delay = self.current_delay_seconds
+
+        # Reset after consuming so delay is one-shot
+        self.current_delay_seconds = 0
+        return max(0, delay)
+
     def dispatch_navigate(self, target_url: str, custom_delay_seconds: int = 0):
         """Handles URL bar or link navigation."""
         if self.is_busy:
             self._notify_ui("سیستم در حال حاضر مشغول پردازش درخواست قبلی است.")
             return
 
+        delay = self.get_and_consume_delay(custom_delay_seconds)
+
         def task():
             self.is_busy = True
-            self._set_loading(True, "در حال آماده‌سازی و ارسال به گیت‌هاب...")
+            msg = f"در حال آماده‌سازی و ارسال به گیت‌هاب (با تأخیر {delay} ثانیه‌ای در رانر)..." if delay > 0 else "در حال آماده‌سازی و ارسال به گیت‌هاب..."
+            self._set_loading(True, msg)
 
             def on_status(msg):
                 self._update_status(msg)
@@ -153,7 +178,7 @@ class OfflineBrowserUI:
             res = self.transport.fetch(
                 target_url=target_url,
                 mode="navigate",
-                custom_delay_seconds=custom_delay_seconds,
+                custom_delay_seconds=delay,
                 status_callback=on_status,
             )
             self._handle_fetch_result(res, target_url)
@@ -170,9 +195,12 @@ class OfflineBrowserUI:
             self._notify_ui("درخواست قبلی هنوز در حال پردازش است.")
             return
 
+        delay = self.get_and_consume_delay(custom_delay_seconds)
+
         def task():
             self.is_busy = True
-            self._set_loading(True, "در حال ارسال اطلاعات فرم به گیت‌هاب...")
+            msg = f"در حال ارسال اطلاعات فرم به گیت‌هاب (با تأخیر {delay} ثانیه‌ای در رانر)..." if delay > 0 else "در حال ارسال اطلاعات فرم به گیت‌هاب..."
+            self._set_loading(True, msg)
 
             body_bytes = base64.b64decode(body_base64) if body_base64 else b""
 
@@ -182,7 +210,7 @@ class OfflineBrowserUI:
                 method=method,
                 content_type=content_type,
                 body_bytes=body_bytes,
-                custom_delay_seconds=custom_delay_seconds,
+                custom_delay_seconds=delay,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, action_url)
@@ -203,9 +231,12 @@ class OfflineBrowserUI:
             self._notify_ui("درخواست قبلی در حال پردازش است.")
             return
 
+        delay = self.get_and_consume_delay(custom_delay_seconds)
+
         def task():
             self.is_busy = True
-            self._set_loading(True, f"در حال بازپخش {len(actions)} اکشن در رانر...")
+            msg = f"در حال بازپخش {len(actions)} اکشن در رانر (با تأخیر {delay} ثانیه‌ای)..." if delay > 0 else f"در حال بازپخش {len(actions)} اکشن در رانر..."
+            self._set_loading(True, msg)
 
             mode = "replay"
             if not actions and intercepted_ajax and intercepted_ajax.get("captured"):
@@ -216,7 +247,7 @@ class OfflineBrowserUI:
                 mode=mode,
                 actions=actions,
                 intercepted_ajax=intercepted_ajax,
-                custom_delay_seconds=custom_delay_seconds,
+                custom_delay_seconds=delay,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, target_url or self.current_url)
@@ -692,7 +723,7 @@ class OfflineBrowserUI:
         <span id="delay-status-text">تأخیر: خاموش</span>
       </div>
       <div id="delay-input-box" class="delay-input-box" style="display: none;">
-        <input type="number" id="delay-seconds-input" min="1" max="180" value="15" title="ثانیه تأخیر در رانر" />
+        <input type="number" id="delay-seconds-input" min="1" max="180" value="15" title="ثانیه تأخیر در رانر" oninput="window.shellApp.onDelayChange()" onchange="window.shellApp.onDelayChange()" />
         <span style="font-size: 11px; color: #94a3b8;">ثانیه</span>
       </div>
     </div>
@@ -889,15 +920,30 @@ class OfflineBrowserUI:
         const container = document.getElementById('delay-container');
         const statusText = document.getElementById('delay-status-text');
         const inputBox = document.getElementById('delay-input-box');
+        const input = document.getElementById('delay-seconds-input');
+        const sec = parseInt(input ? input.value : 15, 10) || 15;
 
         if (this.delayEnabled) {
           container.classList.add('active');
-          statusText.textContent = 'تأخیر: روشن';
+          statusText.textContent = `تأخیر: ${sec}s`;
           inputBox.style.display = 'flex';
-          const sec = document.getElementById('delay-seconds-input').value || 15;
-          this.showToast(`⏱️ تأخیر ${sec} ثانیه‌ای فعال شد (پس از دریافت صفحه خاموش خواهد شد)`);
+          this.showToast(`⏱️ تأخیر ${sec} ثانیه‌ای فعال شد (پس از دریافت داده‌ها خاموش خواهد شد)`);
+          if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
+            window.pywebview.api.set_delay(sec);
+          }
         } else {
           this.resetDelay();
+        }
+      }
+
+      onDelayChange() {
+        if (this.delayEnabled) {
+          const sec = this.getDelaySeconds();
+          const statusText = document.getElementById('delay-status-text');
+          if (statusText) statusText.textContent = `تأخیر: ${sec}s`;
+          if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
+            window.pywebview.api.set_delay(sec);
+          }
         }
       }
 
@@ -909,6 +955,9 @@ class OfflineBrowserUI:
         if (container) container.classList.remove('active');
         if (statusText) statusText.textContent = 'تأخیر: خاموش';
         if (inputBox) inputBox.style.display = 'none';
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
+          window.pywebview.api.set_delay(0);
+        }
       }
 
       getDelaySeconds() {
@@ -1307,11 +1356,23 @@ class OfflineBrowserUI:
     function doSearch() {{
       const q = document.getElementById('start-query').value.trim();
       if (q) {{
-        parent.window.pywebview.api.navigate(q);
+        let delay = 0;
+        try {{
+          if (parent && parent.window && parent.window.shellApp) {{
+            delay = parent.window.shellApp.getDelaySeconds();
+          }}
+        }} catch (e) {{}}
+        parent.window.pywebview.api.navigate(q, delay);
       }}
     }}
     function quickNav(url) {{
-      parent.window.pywebview.api.navigate(url);
+      let delay = 0;
+      try {{
+        if (parent && parent.window && parent.window.shellApp) {{
+          delay = parent.window.shellApp.getDelaySeconds();
+        }}
+      }} catch (e) {{}}
+      parent.window.pywebview.api.navigate(url, delay);
     }}
   </script>
 </body>
@@ -1325,6 +1386,12 @@ class WebviewApiBridge:
     def __init__(self, ui: OfflineBrowserUI):
         # Must use leading underscore so pywebview does not inspect ui.window.native recursively
         self._ui = ui
+
+    def set_delay(self, seconds: Any = 0):
+        self._ui.set_delay(seconds)
+
+    def get_delay(self) -> int:
+        return self._ui.current_delay_seconds
 
     def navigate(self, target_url: str, custom_delay_seconds: int = 0):
         self._ui.dispatch_navigate(target_url, custom_delay_seconds)

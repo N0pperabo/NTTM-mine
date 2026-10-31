@@ -115,7 +115,10 @@ class GitHubTransport:
         timestamp_part = int(time.time())
         random_part = uuid.uuid4().hex[:6]
         request_id = f"{timestamp_part}_{random_part}"
-        update_status(f"ایجاد پاکت درخواست با شناسه: {request_id}")
+        if custom_delay_seconds > 0:
+            update_status(f"ایجاد پاکت درخواست {request_id} (با تأخیر {custom_delay_seconds} ثانیه‌ای در رانر)...")
+        else:
+            update_status(f"ایجاد پاکت درخواست با شناسه: {request_id}")
 
         # 2. Prepare envelope
         storage_state, session_storage = self.session_manager.get_envelope_state()

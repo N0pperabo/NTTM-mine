@@ -346,9 +346,11 @@ async function main() {
     await autoScrollPage(page);
 
     // Apply custom delay if requested (e.g. for captchas, Cloudflare turnstile, dynamic rendering)
-    if (custom_delay_seconds > 0) {
-      console.log(`[Runner] Waiting custom delay of ${custom_delay_seconds} seconds before capture...`);
-      await page.waitForTimeout(custom_delay_seconds * 1000);
+    const delaySec = parseInt(custom_delay_seconds || 0, 10);
+    if (delaySec > 0) {
+      console.log(`[Runner] ⏱️ Waiting custom delay of ${delaySec} seconds before capture...`);
+      await page.waitForTimeout(delaySec * 1000);
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
       await autoScrollPage(page);
     }
 
