@@ -2,8 +2,7 @@
 // Cloudflare Challenge / Turnstile Automatic Detector & Solver
 async function handleCloudflareChallenge(page) {
   try {
-    // 1. FAST CHECK: Is Cloudflare challenge present?
-    const checkIsChallenge = async () => {
+    const isChallengeActive = async () => {
       const title = (await page.title().catch(() => '')).toLowerCase();
       const isCfTitle =
         title.includes('just a moment') ||
@@ -17,7 +16,7 @@ async function handleCloudflareChallenge(page) {
         title.includes('لطفا صبر کنید') ||
         title.includes('تایید امنیتی');
 
-      const hasCfElement = await page.evaluate(() => {
+      const hasCfDom = await page.evaluate(() => {
         try {
           const text = (document.body ? document.body.innerText : '') || '';
           return !!(
@@ -32,94 +31,109 @@ async function handleCloudflareChallenge(page) {
             window._cf_chl_opt ||
             text.includes('Verify you are human') ||
             text.includes('Checking if the site connection is secure') ||
-            text.includes('در حال انجام تایید امنیتی') ||
-            text.includes('تایید موفقیت آمیز بود') ||
-            text.includes('در انتظار هدایت') ||
-            text.includes('Cloudflare')
+            text.includes('در حال انجام تایید امنیتی')
           );
         } catch (e) {
           return false;
         }
       }).catch(() => false);
 
-      return isCfTitle || hasCfElement;
+      return isCfTitle || hasCfDom;
     };
 
-    if (!(await checkIsChallenge())) {
-      // Zero overhead: No Cloudflare challenge detected!
-      return false;
+    if (!(await isChallengeActive())) {
+      return false; // Not a Cloudflare challenge
     }
 
-    console.log('[Cloudflare] 🛡️ Cloudflare Challenge / Turnstile detected!');
-    console.log('[Cloudflare] ⏳ Waiting up to 15 seconds for challenge & Turnstile iframe to fully render...');
+    console.log('[Cloudflare] 🛡️ Cloudflare Challenge / Turnstile active!');
+    console.log('[Cloudflare] ⏳ Waiting up to 15 seconds for Turnstile widget & iframe...');
 
-    // 2. Wait up to 15s for the challenge iframe or widget to appear
-    const iframeLocator = page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]').first();
+    // Wait up to 15s for the challenge iframe or widget container to appear
+    const iframeLocator = page.locator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"], #challenge-stage iframe, #bcQj6 iframe').first();
     let iframeVisible = false;
     try {
       await iframeLocator.waitFor({ state: 'visible', timeout: 15000 });
       iframeVisible = true;
       console.log('[Cloudflare] Turnstile challenge iframe is now visible.');
     } catch (e) {
-      console.log('[Cloudflare] Iframe wait finished or challenge is running via background JS.');
+      console.log('[Cloudflare] Visible iframe wait timed out. Checking widget elements...');
     }
 
-    // Let the widget settle and execute initial telemetry
-    await page.waitForTimeout(2000);
+    // Human-like pause for telemetry and challenge rendering
+    await page.waitForTimeout(2500);
 
-    // 3. Attempt to locate and click the checkbox with human-like mouse movement
+    // Click checkbox
     let clicked = false;
-
-    // Strategy A: frameLocator to find inner checkbox or label
     try {
-      const cfFrame = page.frameLocator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"]').first();
+      const cfFrame = page.frameLocator('iframe[src*="challenges.cloudflare.com"], iframe[src*="challenge-platform"], #bcQj6 iframe').first();
       const checkbox = cfFrame.locator('input[type="checkbox"], .ctp-checkbox-label, label, #challenge-stage, body').first();
       if ((await checkbox.count()) > 0) {
         const box = await checkbox.boundingBox();
         if (box && box.width > 0 && box.height > 0) {
           const clickX = box.x + Math.min(30, box.width / 2);
           const clickY = box.y + box.height / 2;
-          console.log(`[Cloudflare] 🖱️ Moving mouse naturally to inner checkbox: x=${clickX}, y=${clickY}`);
+          console.log(`[Cloudflare] 🖱️ Moving mouse to inner checkbox: x=${clickX}, y=${clickY}`);
           await page.mouse.move(clickX, clickY, { steps: 25 });
           await page.waitForTimeout(300);
           await page.mouse.down();
           await page.waitForTimeout(150);
           await page.mouse.up();
           clicked = true;
-          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy A (frameLocator).');
         }
       }
     } catch (errA) {}
 
-    // Strategy B: If inner locator was blocked by closed shadow root, click the iframe bounding box at the checkbox offset
     if (!clicked && iframeVisible) {
       try {
         const box = await iframeLocator.boundingBox();
         if (box) {
           const targetX = box.x + 30;
           const targetY = box.y + box.height / 2;
-          console.log(`[Cloudflare] 🖱️ Moving mouse to iframe bounding box coordinates: x=${targetX}, y=${targetY}`);
+          console.log(`[Cloudflare] 🖱️ Moving mouse to iframe bounding box: x=${targetX}, y=${targetY}`);
           await page.mouse.move(targetX, targetY, { steps: 25 });
           await page.waitForTimeout(300);
           await page.mouse.down();
           await page.waitForTimeout(150);
           await page.mouse.up();
           clicked = true;
-          console.log('[Cloudflare] ✅ Clicked checkbox via Strategy B (Iframe Coordinates).');
         }
       } catch (errB) {}
     }
 
-    console.log('[Cloudflare] ⏳ Waiting up to 35 seconds for verification & redirect to destination site...');
+    console.log('[Cloudflare] ⏳ Waiting up to 35 seconds for token generation and redirect to destination site...');
 
-    // 4. Wait for clearance and redirect (up to 35 seconds)
+    // Wait up to 35 seconds for clearance & navigation
     const waitStartTime = Date.now();
     while (Date.now() - waitStartTime < 35000) {
       await page.waitForTimeout(1000);
 
-      // Check if redirect already occurred or challenge is completely gone
-      const isStillInChallenge = await checkIsChallenge();
-      if (!isStillInChallenge) {
+      // Check if title is now a real site title (not challenge)
+      const currentTitle = (await page.title().catch(() => '')).toLowerCase();
+      const stillInCfTitle =
+        currentTitle.includes('just a moment') ||
+        currentTitle.includes('checking your browser') ||
+        currentTitle.includes('attention required') ||
+        currentTitle.includes('security check') ||
+        currentTitle.includes('ddos-guard') ||
+        currentTitle.includes('چند لحظه صبر کنید') ||
+        currentTitle.includes('یک لحظه صبر کنید') ||
+        currentTitle.includes('در حال بررسی') ||
+        currentTitle.includes('لطفا صبر کنید') ||
+        currentTitle.includes('تایید امنیتی');
+
+      // Check if token was solved or cookie is set
+      const isTokenSolved = await page.evaluate(() => {
+        try {
+          const input = document.querySelector('input[name="cf-turnstile-response"]');
+          const hasToken = !!(input && input.value && input.value.trim().length > 10);
+          const hasCookie = document.cookie.includes('cf_clearance');
+          return hasToken || hasCookie;
+        } catch (e) {
+          return false;
+        }
+      }).catch(() => false);
+
+      if (!stillInCfTitle) {
         console.log(`[Cloudflare] 🎉 Successfully cleared Cloudflare! Destination loaded: "${await page.title().catch(() => '')}"`);
         await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
@@ -127,20 +141,13 @@ async function handleCloudflareChallenge(page) {
         return true;
       }
 
-      // Check if it's currently showing "Success / Waiting for redirect"
-      const isRedirectPending = await page.evaluate(() => {
-        const t = (document.body ? document.body.innerText : '') || '';
-        return t.includes('تایید موفقیت آمیز بود') || t.includes('در انتظار هدایت') || t.includes('Waiting to be redirected') || t.includes('Redirecting');
-      }).catch(() => false);
-
-      if (isRedirectPending) {
-        console.log('[Cloudflare] ⏳ Verification succeeded! Actively waiting for destination navigation to complete...');
-        // Wait for actual navigation
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-        await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+      if (isTokenSolved) {
+        console.log('[Cloudflare] 🔑 Token solved / clearance cookie acquired! Waiting for redirect...');
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {});
+        await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
         await page.waitForTimeout(2000);
-        console.log(`[Cloudflare] 🎉 Navigation completed! Current page: "${await page.title().catch(() => '')}"`);
+        console.log(`[Cloudflare] 🎉 Post-redirect title: "${await page.title().catch(() => '')}"`);
         return true;
       }
     }
@@ -310,19 +317,21 @@ async function main() {
     process.exit(1);
   }
 
+  const isHeadless = !process.env.DISPLAY;
+  console.log(`[Browser] Launching Chromium (Headless: ${isHeadless}, Display: ${process.env.DISPLAY || 'None'})...`);
   const browser = await chromium.launch({
-    headless: true,
+    headless: isHeadless,
     ignoreDefaultArgs: ['--enable-automation'],
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-web-security',
       '--disable-blink-features=AutomationControlled',
       '--disable-infobars',
       '--no-first-run',
       '--no-default-browser-check',
       '--window-size=1920,1080',
+      '--start-maximized',
       '--lang=en-US,en'
     ]
   });
