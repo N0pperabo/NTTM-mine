@@ -70,9 +70,10 @@ jobs:
           # Delete existing release/tag if retry
           gh release delete "$TAG" --yes 2>/dev/null || true
           git push --delete origin "$TAG" 2>/dev/null || true
+          git tag -d "$TAG" 2>/dev/null || true
 
           echo "Creating release $TAG and uploading chunks..."
-          gh release create "$TAG" payload.zip.part* --title "Package $TAG" --notes "build: sync cache manifest"
+          gh release create "$TAG" payload.zip.part* --target "${{ github.ref_name }}" --title "Package $TAG" --notes "build: sync cache manifest"
 
           echo "Uploading manifest.json as atomic completion signal..."
           gh release upload "$TAG" manifest.json

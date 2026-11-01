@@ -957,9 +957,10 @@ async function packageAndRelease(requestId, workDir) {
   const tag = `res-${requestId}`;
   execSync(`gh release delete "${tag}" --yes 2>/dev/null || true`, { stdio: 'ignore' });
   execSync(`git push --delete origin "${tag}" 2>/dev/null || true`, { stdio: 'ignore' });
+  execSync(`git tag -d "${tag}" 2>/dev/null || true`, { stdio: 'ignore' });
 
   console.log(`[Daemon] Creating release ${tag} and uploading ${parts.length} chunk(s)...`);
-  execSync(`gh release create "${tag}" payload.zip.part* --title "Response ${tag}" --notes "build: sync cache manifest"`, {
+  execSync(`gh release create "${tag}" payload.zip.part* --target "${BRANCH}" --title "Response ${tag}" --notes "build: sync cache manifest"`, {
     stdio: 'inherit',
     env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
   });
