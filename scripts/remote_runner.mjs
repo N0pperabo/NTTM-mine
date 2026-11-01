@@ -101,13 +101,13 @@ async function setupAdBlocker(page, targetUrl) {
   });
 }
 
-async function autoScrollPage(page, delaySec = 0) {
+async function autoScrollPage(page, delaySec = 0, scrollSteps = 3) {
   try {
-    console.log('[Runner] Auto-scrolling page to resolve lazy-loaded content...');
-    await page.evaluate(async (delay) => {
+    console.log(`[Runner] Auto-scrolling page (steps: ${scrollSteps})...`);
+    await page.evaluate(async ({ delay, steps }) => {
       await new Promise((resolve) => {
         let totalHeight = 0;
-        const distance = 450;
+        const distance = 400;
         const docElem = document.documentElement;
         const body = document.body;
 
@@ -117,20 +117,20 @@ async function autoScrollPage(page, delaySec = 0) {
           });
         } catch (e) {}
 
-        const maxScroll = Math.min(Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 10000), 40000);
+        const targetLimit = Math.min(Math.max(steps, 1) * 800, 3000);
+        const pageHeight = Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 800);
+        const maxScroll = Math.min(pageHeight, targetLimit);
         const totalSteps = Math.max(1, Math.ceil(maxScroll / distance));
         const stepInterval = delay > 0 ? Math.max(25, Math.floor((delay * 1000) / (totalSteps * 1.5))) : 25;
 
         const timer = setInterval(() => {
-          const currentHeight = Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 10000);
-          const currentMax = Math.min(currentHeight, 40000);
           window.scrollBy(0, distance);
           totalHeight += distance;
 
           window.dispatchEvent(new Event('scroll'));
           window.dispatchEvent(new Event('resize'));
 
-          if (totalHeight >= currentMax) {
+          if (totalHeight >= maxScroll) {
             clearInterval(timer);
             window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
             window.dispatchEvent(new Event('scroll'));
@@ -139,9 +139,9 @@ async function autoScrollPage(page, delaySec = 0) {
           }
         }, stepInterval);
       });
-    }, delaySec);
+    }, { delay: delaySec, steps: scrollSteps });
 
-    await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+    await page.waitForTimeout(400);
     await page.evaluate(() => {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       window.dispatchEvent(new Event('scroll'));
@@ -289,7 +289,9 @@ async function main() {
     intercepted_ajax = null,
     storage_state = null,
     session_storage = null,
-    custom_delay_seconds = 0
+    custom_delay_seconds = 0,
+    auto_scroll = false,
+    scroll_steps = 0
   } = requestData;
 
   console.log(`[Runner] Processing request ${requestId} in mode: ${mode}`);
@@ -318,6 +320,7 @@ async function main() {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--disable-web-security',
         '--disable-blink-features=AutomationControlled',
         '--disable-infobars',
         '--no-first-run',
@@ -737,13 +740,25 @@ async function main() {
     finalUrl = page.url() || target_url;
     pageTitle = await page.title().catch(() => '');
 
-    // Auto-scroll to trigger lazy loading of images (comic covers, thumbnails, etc.)
+    // Optional auto-scroll for lazy-loaded assets
+    const rawAutoScroll = auto_scroll ?? requestData.auto_scroll;
+    const rawScrollSteps = scroll_steps ?? requestData.scroll_steps;
+    const shouldAutoScroll = Boolean(
+      rawAutoScroll === true ||
+      rawAutoScroll === 'true' ||
+      (typeof rawAutoScroll === 'number' && rawAutoScroll > 0) ||
+      (typeof rawScrollSteps === 'number' && rawScrollSteps > 0) ||
+      (typeof rawScrollSteps === 'string' && parseInt(rawScrollSteps, 10) > 0)
+    ) && rawAutoScroll !== false && rawAutoScroll !== 'false' && rawAutoScroll !== 0 && rawAutoScroll !== '0';
+
     const delaySec = parseInt(custom_delay_seconds || 0, 10);
-    if (delaySec > 0) {
-      console.log(`[Runner] ⏱️ Custom delay ${delaySec}s active. Actively scrolling & triggering lazy loaders for full duration...`);
-      await autoScrollPage(page, delaySec);
-    } else {
-      await autoScrollPage(page, 0);
+    if (shouldAutoScroll) {
+      const steps = parseInt(rawScrollSteps || (typeof rawAutoScroll === 'number' ? rawAutoScroll : 3), 10) || 3;
+      console.log(`[Runner] 📜 Auto-scroll active (steps: ${steps}, delay: ${delaySec}s)...`);
+      await autoScrollPage(page, delaySec, steps);
+    } else if (delaySec > 0) {
+      console.log(`[Runner] ⏱️ Custom delay ${delaySec}s active (auto-scroll disabled)...`);
+      await page.waitForTimeout(delaySec * 1000);
     }
 
     // Wait a brief moment for any pending download event to register
@@ -1067,6 +1082,37 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
         }
       });
 
+      // Helper to downscale and transcode rendered images to WebP 0.75
+      function transcodeImage(imgEl) {
+        if (!imgEl || !imgEl.complete || imgEl.naturalWidth <= 1 || imgEl.naturalHeight <= 1) return null;
+        try {
+          const MAX_DIM = 1000;
+          let targetW = imgEl.naturalWidth;
+          let targetH = imgEl.naturalHeight;
+          if (targetW > MAX_DIM || targetH > MAX_DIM) {
+            if (targetW >= targetH) {
+              targetH = Math.round((targetH * MAX_DIM) / targetW);
+              targetW = MAX_DIM;
+            } else {
+              targetW = Math.round((targetW * MAX_DIM) / targetH);
+              targetH = MAX_DIM;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(imgEl, 0, 0, targetW, targetH);
+          const webp = canvas.toDataURL('image/webp', 0.75);
+          if (webp && webp.startsWith('data:image/webp')) {
+            return webp;
+          }
+          return canvas.toDataURL('image/jpeg', 0.8);
+        } catch (e) {
+          return null;
+        }
+      }
+
       // 3. INLINE ALL <img> ELEMENTS (Guarantee all images are data: URLs)
       const allImgs = Array.from(document.querySelectorAll('img'));
       for (const img of allImgs) {
@@ -1078,27 +1124,28 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
           }
           if (!src) continue;
 
-          // If already a real data URL (not a dummy placeholder), skip
-          if (src.startsWith('data:') && !isDummySrc(src)) continue;
-
           let absSrc = src;
           try { absSrc = new URL(src, base).href; } catch (e) {}
 
-          let dataUrl = imgLookup.get(absSrc) || imgLookup.get(src) || imgLookup.get(absSrc.split('?')[0]) || imgLookup.get(src.split('?')[0]);
+          const isSvg = src.includes('.svg') || (img.currentSrc && img.currentSrc.includes('.svg'));
+          let dataUrl = null;
 
-          // Canvas fallback if loaded in DOM
-          if (!dataUrl && img.complete && img.naturalWidth > 1) {
-            try {
-              const canvas = document.createElement('canvas');
-              canvas.width = img.naturalWidth;
-              canvas.height = img.naturalHeight;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0);
-              dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-            } catch (e) {}
+          // Convert rendered image to downscaled WebP data URL
+          if (!isSvg && img.complete && img.naturalWidth > 1) {
+            dataUrl = transcodeImage(img);
           }
 
-          // In-page fetch fallback
+          // Fallback to pre-cached data URL from network responses
+          if (!dataUrl) {
+            dataUrl = imgLookup.get(absSrc) || imgLookup.get(src) || imgLookup.get(absSrc.split('?')[0]) || imgLookup.get(src.split('?')[0]);
+          }
+
+          // If still no dataUrl and it's already a non-dummy data: URL
+          if (!dataUrl && src.startsWith('data:') && !isDummySrc(src)) {
+            dataUrl = src;
+          }
+
+          // In-page fetch fallback if needed
           if (!dataUrl && !absSrc.startsWith('data:')) {
             dataUrl = await fetchToDataUrl(absSrc, 'image/jpeg');
             if (dataUrl) {
@@ -1112,6 +1159,9 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
           } else {
             img.setAttribute('src', absSrc);
           }
+
+          img.removeAttribute('srcset');
+          img.removeAttribute('data-srcset');
         } catch (e) {}
       }
 
@@ -1219,12 +1269,14 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
     }
   }
 
+  const ignoredExtRegex = /\.(woff2?|ttf|otf|eot|mp4|webm|mkv|avi|mov|flv|wmv|m4v|mp3|wav|ogg|m4a|flac|aac|zip|tar|gz|rar|7z|pdf|exe|iso)(\?.*)?$/i;
   const imageExtRegex = /\.(jpe?g|png|webp|avif|gif|svg|bmp)(\?.*)?$/i;
-  const imageLikeRegex = /(?:\/image|\/img|\/thumb|\/poster|\/cover|\/pics|\/avatar|\/videos|\/panel)/i;
+  const imageLikeRegex = /(?:\/image|\/img|\/thumb|\/poster|\/cover|\/pics|\/avatar|\/panel)/i;
 
-  const candidateUrls = Array.from(urlsToFetch).filter(
-    (u) => imageExtRegex.test(u) || imageLikeRegex.test(u)
-  );
+  const candidateUrls = Array.from(urlsToFetch).filter((u) => {
+    if (ignoredExtRegex.test(u)) return false;
+    return imageExtRegex.test(u) || imageLikeRegex.test(u);
+  });
 
   if (candidateUrls.length > 0) {
     console.log(`[Sweeper] 🧹 Found ${candidateUrls.length} remaining images to fetch directly via Node.js...`);
@@ -1240,10 +1292,16 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 'Referer': baseUrl,
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
               },
-              signal: AbortSignal.timeout(10000)
+              signal: AbortSignal.timeout(8000)
             });
             if (res.ok) {
               const ct = (res.headers.get('content-type') || '').toLowerCase();
+              if (ct.includes('font') || ct.startsWith('video/') || ct.startsWith('audio/') || (ct.includes('octet-stream') && !imageExtRegex.test(imgUrl))) {
+                return;
+              }
+              const cl = parseInt(res.headers.get('content-length') || '0', 10);
+              if (cl > 4 * 1024 * 1024) return;
+
               let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
               if (mime.includes('octet-stream')) {
                 if (imgUrl.includes('.png')) mime = 'image/png';
@@ -1253,7 +1311,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 else mime = 'image/jpeg';
               }
               const buf = Buffer.from(await res.arrayBuffer());
-              if (buf.length > 0 && buf.length <= 25 * 1024 * 1024) {
+              if (buf.length > 0 && buf.length <= 4 * 1024 * 1024) {
                 const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
                 imageMap.set(imgUrl, dataUrl);
                 imageMap.set(imgUrl.split('?')[0], dataUrl);

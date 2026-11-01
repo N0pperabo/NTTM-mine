@@ -34,8 +34,21 @@ class WebviewApiBridge:
     def get_delay(self) -> int:
         return self._ui.current_delay_seconds
 
-    def navigate(self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = ""):
-        self._ui.dispatch_navigate(target_url, custom_delay_seconds, tab_id=tab_id)
+    def set_scroll(self, steps: Any = 0):
+        self._ui.set_scroll(steps)
+
+    def set_custom_scroll(self, steps: Any = 0):
+        self._ui.set_scroll(steps)
+
+    def get_scroll(self) -> int:
+        return self._ui.current_scroll_steps
+
+    def navigate(
+        self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = "", custom_scroll_steps: int = 0
+    ):
+        self._ui.dispatch_navigate(
+            target_url, custom_delay_seconds, tab_id=tab_id, custom_scroll_steps=custom_scroll_steps
+        )
 
     def navigate_shorts_next(self, current_video_id: str = "", tab_id: str = "") -> Dict[str, Any]:
         actions = [{"type": "shorts_next", "wait_after_ms": 2500}]
@@ -43,9 +56,24 @@ class WebviewApiBridge:
         return {"status": "ok"}
 
     def submit_form(
-        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0, tab_id: str = ""
+        self,
+        action_url: str,
+        method: str,
+        content_type: str,
+        body_base64: str,
+        custom_delay_seconds: int = 0,
+        tab_id: str = "",
+        custom_scroll_steps: int = 0,
     ):
-        self._ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds, tab_id=tab_id)
+        self._ui.dispatch_form_submit(
+            action_url,
+            method,
+            content_type,
+            body_base64,
+            custom_delay_seconds,
+            tab_id=tab_id,
+            custom_scroll_steps=custom_scroll_steps,
+        )
 
     def dispatch_replay(
         self,
@@ -54,11 +82,33 @@ class WebviewApiBridge:
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_delay_seconds: int = 0,
         tab_id: str = "",
+        custom_scroll_steps: int = 0,
     ):
-        self._ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds, tab_id=tab_id)
+        self._ui.dispatch_replay(
+            target_url,
+            actions,
+            intercepted_ajax,
+            custom_delay_seconds,
+            tab_id=tab_id,
+            custom_scroll_steps=custom_scroll_steps,
+        )
 
-    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0, tab_id: str = ""):
-        self._ui.dispatch_replay(target_url, actions, None, custom_delay_seconds, tab_id=tab_id)
+    def run_batch_actions(
+        self,
+        target_url: str,
+        actions: List[Dict[str, Any]],
+        custom_delay_seconds: int = 0,
+        tab_id: str = "",
+        custom_scroll_steps: int = 0,
+    ):
+        self._ui.dispatch_replay(
+            target_url,
+            actions,
+            None,
+            custom_delay_seconds,
+            tab_id=tab_id,
+            custom_scroll_steps=custom_scroll_steps,
+        )
 
     def set_batch_mode(self, enabled: bool):
         self._ui.is_batch_mode = bool(enabled)

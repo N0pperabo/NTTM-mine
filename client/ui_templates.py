@@ -234,8 +234,8 @@ def generate_shell_html() -> str:
       background: #000000;
     }
 
-    /* Custom Delay Controls */
-    .delay-container {
+    /* Custom Delay & Scroll Controls */
+    .delay-container, .scroll-container {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -246,14 +246,14 @@ def generate_shell_html() -> str:
       transition: all 0.15s ease;
       flex-shrink: 0;
     }
-    .delay-container:hover {
+    .delay-container:hover, .scroll-container:hover {
       border-color: #ffffff;
     }
-    .delay-container.active {
+    .delay-container.active, .scroll-container.active {
       background: #ffffff;
       border-color: #ffffff;
     }
-    .delay-btn {
+    .delay-btn, .scroll-btn {
       display: flex;
       align-items: center;
       gap: 4px;
@@ -263,10 +263,10 @@ def generate_shell_html() -> str:
       color: #ffffff;
       font-weight: 600;
     }
-    .delay-container.active .delay-btn {
+    .delay-container.active .delay-btn, .scroll-container.active .scroll-btn {
       color: #000000;
     }
-    .delay-input-box {
+    .delay-input-box, .scroll-input-box {
       display: flex;
       align-items: center;
       gap: 4px;
@@ -274,7 +274,7 @@ def generate_shell_html() -> str:
       padding-right: 6px;
       margin-right: 2px;
     }
-    .delay-input-box input {
+    .delay-input-box input, .scroll-input-box input {
       width: 40px;
       background: #000000;
       border: 1px solid #444444;
@@ -752,6 +752,15 @@ def generate_shell_html() -> str:
         <span id="daemon-text">دیمون</span>
       </div>
 
+      <div class="scroll-container" id="scroll-box">
+        <div class="scroll-input-box">
+          <input type="number" id="scroll-val" min="1" max="20" value="3" title="تعداد اسکرول صفحه (هر واحد = 1 اسکرول صفحه)" onchange="window.shellApp.updateCustomScroll()" />
+        </div>
+        <div class="scroll-btn" id="scroll-btn" onclick="window.shellApp.toggleCustomScroll()" title="فعال/غیرفعال‌سازی اسکرول برای درخواست بعدی">
+          <span>اسکرول</span>
+        </div>
+      </div>
+
       <div class="delay-container" id="delay-box">
         <div class="delay-input-box">
           <input type="number" id="delay-val" min="1" max="60" value="5" title="ثانیه تاخیر پس از رندر صفحه" onchange="window.shellApp.updateCustomDelay()" />
@@ -903,6 +912,7 @@ def generate_shell_html() -> str:
       isBatchMode: false,
       isDaemonActive: false,
       isCustomDelayActive: false,
+      isCustomScrollActive: false,
       currentLiveUrl: '',
       queue: [],
       tabs: [],
@@ -1094,6 +1104,9 @@ def generate_shell_html() -> str:
         tab.title = title || targetUrl || 'صفحه آفلاین';
         tab.frameSrc = localUrl;
 
+        this.isCustomScrollActive = false;
+        document.getElementById('scroll-box')?.classList.remove('active');
+
         // History recording
         if (tab.historyIndex < tab.history.length - 1) {
           tab.history = tab.history.slice(0, tab.historyIndex + 1);
@@ -1188,6 +1201,7 @@ def generate_shell_html() -> str:
         if (!tab) return;
 
         const delay = customDelay !== undefined ? customDelay : (this.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0);
+        const scroll = this.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
         tab.url = url;
         tab.isLoading = true;
         tab.title = url.replace(/^https?:\/\//, '');
@@ -1200,7 +1214,7 @@ def generate_shell_html() -> str:
         this.renderTabs();
 
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.navigate(url, delay, tab.id);
+          window.pywebview.api.navigate(url, delay, tab.id, scroll);
         }
       },
 
@@ -1357,6 +1371,31 @@ def generate_shell_html() -> str:
         }
       },
 
+      toggleCustomScroll: function() {
+        this.isCustomScrollActive = !this.isCustomScrollActive;
+        const container = document.getElementById('scroll-box');
+        if (container) {
+          if (this.isCustomScrollActive) {
+            container.classList.add('active');
+          } else {
+            container.classList.remove('active');
+          }
+        }
+        this.updateCustomScroll();
+      },
+
+      updateCustomScroll: function() {
+        const valInput = document.getElementById('scroll-val');
+        let count = parseInt(valInput ? valInput.value : '3', 10);
+        if (isNaN(count) || count < 1) count = 1;
+        if (count > 20) count = 20;
+        if (valInput) valInput.value = count;
+
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.set_custom_scroll(this.isCustomScrollActive ? count : 0);
+        }
+      },
+
       queueAction: function(action) {
         if (action.type === 'fill') {
           const last = this.queue[this.queue.length - 1];
@@ -1439,11 +1478,12 @@ def generate_shell_html() -> str:
           return;
         }
         const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
+        const scroll = this.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
         this.showLoading('در حال ارسال ' + this.queue.length + ' اقدام زنجیره‌ای به گیت‌هاب...');
         const actionsToSend = [...this.queue];
         this.clearQueue();
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.run_batch_actions(targetUrl, actionsToSend, delay, tab ? tab.id : '');
+          window.pywebview.api.run_batch_actions(targetUrl, actionsToSend, delay, tab ? tab.id : '', scroll);
         }
       },
 

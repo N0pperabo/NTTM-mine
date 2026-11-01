@@ -28,7 +28,7 @@ class BrowserConfig:
     branch: str = "main"
     default_search_url: str = "https://www.google.com/search?q={query}"
     chunk_size_mb: int = 50
-    poll_interval_seconds: float = 3.0
+    poll_interval_seconds: float = 1.0
     timeout_seconds: int = 240
     downloads_dir: str = ""
     encryption_key: str = ""
@@ -73,7 +73,7 @@ class BrowserConfig:
                     "default_search_url", "https://www.google.com/search?q={query}"
                 ),
                 chunk_size_mb=data.get("chunk_size_mb", 50),
-                poll_interval_seconds=data.get("poll_interval_seconds", 3.0),
+                poll_interval_seconds=1.0 if data.get("poll_interval_seconds") in (2.0, 3.0, None) else float(data.get("poll_interval_seconds", 1.0)),
                 timeout_seconds=data.get("timeout_seconds", 240),
                 downloads_dir=data.get("downloads_dir", ""),
                 encryption_key=data.get("encryption_key", ""),

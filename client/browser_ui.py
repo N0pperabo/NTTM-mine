@@ -59,6 +59,7 @@ class OfflineBrowserUI:
         self.is_batch_mode: bool = False
         self.action_queue: List[Dict[str, Any]] = []
         self.current_delay_seconds: int = 0
+        self.current_scroll_steps: int = 0
 
     def push_js_event(self, js_code: str):
         with self._js_events_lock:
@@ -143,26 +144,57 @@ class OfflineBrowserUI:
         self.current_delay_seconds = 0
         return max(0, delay)
 
-    def dispatch_navigate(self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = ""):
+    def set_scroll(self, steps: Any):
+        try:
+            self.current_scroll_steps = max(0, int(steps or 0))
+        except Exception:
+            self.current_scroll_steps = 0
+        logger.info(f"Custom scroll steps set to {self.current_scroll_steps} in Python UI state.")
+
+    def get_and_consume_scroll(self, param_scroll: Any = 0) -> int:
+        """Returns the scroll steps and resets it back to 0."""
+        steps = 0
+        try:
+            steps = int(param_scroll or 0)
+        except Exception:
+            steps = 0
+        if steps <= 0:
+            steps = self.current_scroll_steps
+
+        # Reset after consuming so scroll is one-shot
+        self.current_scroll_steps = 0
+        return max(0, steps)
+
+    def dispatch_navigate(
+        self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = "", custom_scroll_steps: int = 0
+    ):
         """Handles URL bar or link navigation."""
         if self.is_busy:
             self._notify_ui("سیستم در حال حاضر مشغول پردازش درخواست قبلی است.")
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
+        scroll_steps = self.get_and_consume_scroll(custom_scroll_steps)
 
         def task():
             self.is_busy = True
-            msg = f"در حال آماده‌سازی و ارسال به گیت‌هاب (با تأخیر {delay} ثانیه‌ای در رانر)..." if delay > 0 else "در حال آماده‌سازی و ارسال به گیت‌هاب..."
+            details = []
+            if delay > 0:
+                details.append(f"تأخیر {delay} ثانیه‌ای")
+            if scroll_steps > 0:
+                details.append(f"{scroll_steps} مرحله اسکرول")
+            msg_suffix = f" (با {' و '.join(details)} در رانر)..." if details else "..."
+            msg = f"در حال آماده‌سازی و ارسال به گیت‌هاب{msg_suffix}"
             self._set_loading(True, msg)
 
             def on_status(msg):
                 self._update_status(msg)
 
-            res = self.transport.fetch(
+            res = self.transport.fetch_page(
                 target_url=target_url,
                 mode="navigate",
                 custom_delay_seconds=delay,
+                custom_scroll_steps=scroll_steps,
                 status_callback=on_status,
             )
             self._handle_fetch_result(res, target_url, tab_id=tab_id)
@@ -172,7 +204,14 @@ class OfflineBrowserUI:
         threading.Thread(target=task, daemon=True).start()
 
     def dispatch_form_submit(
-        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0, tab_id: str = ""
+        self,
+        action_url: str,
+        method: str,
+        content_type: str,
+        body_base64: str,
+        custom_delay_seconds: int = 0,
+        tab_id: str = "",
+        custom_scroll_steps: int = 0,
     ):
         """Handles form submission."""
         if self.is_busy:
@@ -180,21 +219,29 @@ class OfflineBrowserUI:
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
+        scroll_steps = self.get_and_consume_scroll(custom_scroll_steps)
 
         def task():
             self.is_busy = True
-            msg = f"در حال ارسال اطلاعات فرم به گیت‌هاب (با تأخیر {delay} ثانیه‌ای در رانر)..." if delay > 0 else "در حال ارسال اطلاعات فرم به گیت‌هاب..."
+            details = []
+            if delay > 0:
+                details.append(f"تأخیر {delay} ثانیه‌ای")
+            if scroll_steps > 0:
+                details.append(f"{scroll_steps} مرحله اسکرول")
+            msg_suffix = f" (با {' و '.join(details)} در رانر)..." if details else "..."
+            msg = f"در حال ارسال اطلاعات فرم به گیت‌هاب{msg_suffix}"
             self._set_loading(True, msg)
 
             body_bytes = base64.b64decode(body_base64) if body_base64 else b""
 
-            res = self.transport.fetch(
+            res = self.transport.fetch_page(
                 target_url=action_url,
                 mode="form",
                 method=method,
                 content_type=content_type,
                 body_bytes=body_bytes,
                 custom_delay_seconds=delay,
+                custom_scroll_steps=scroll_steps,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, action_url, tab_id=tab_id)
@@ -210,6 +257,7 @@ class OfflineBrowserUI:
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_delay_seconds: int = 0,
         tab_id: str = "",
+        custom_scroll_steps: int = 0,
     ):
         """Handles single or batch replay execution."""
         if self.is_busy:
@@ -217,22 +265,30 @@ class OfflineBrowserUI:
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
+        scroll_steps = self.get_and_consume_scroll(custom_scroll_steps)
 
         def task():
             self.is_busy = True
-            msg = f"در حال بازپخش {len(actions)} اکشن در رانر (با تأخیر {delay} ثانیه‌ای)..." if delay > 0 else f"در حال بازپخش {len(actions)} اکشن در رانر..."
+            details = []
+            if delay > 0:
+                details.append(f"تأخیر {delay} ثانیه‌ای")
+            if scroll_steps > 0:
+                details.append(f"{scroll_steps} مرحله اسکرول")
+            msg_suffix = f" (با {' و '.join(details)})..." if details else "..."
+            msg = f"در حال بازپخش {len(actions)} اکشن در رانر{msg_suffix}"
             self._set_loading(True, msg)
 
             mode = "replay"
             if not actions and intercepted_ajax and intercepted_ajax.get("captured"):
                 mode = "ajax_fallback"
 
-            res = self.transport.fetch(
+            res = self.transport.fetch_page(
                 target_url=target_url or self.current_url,
                 mode=mode,
                 actions=actions,
                 intercepted_ajax=intercepted_ajax,
                 custom_delay_seconds=delay,
+                custom_scroll_steps=scroll_steps,
                 status_callback=self._update_status,
             )
             self._handle_fetch_result(res, target_url or self.current_url, tab_id=tab_id)

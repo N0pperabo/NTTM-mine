@@ -139,6 +139,7 @@ class GitHubTransport:
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_headers: Optional[Dict[str, str]] = None,
         custom_delay_seconds: int = 0,
+        custom_scroll_steps: int = 0,
         status_callback: Optional[Callable[[str], None]] = None,
     ) -> FetchResult:
         """
@@ -165,8 +166,13 @@ class GitHubTransport:
         timestamp_part = int(time.time())
         random_part = uuid.uuid4().hex[:6]
         request_id = f"{timestamp_part}_{random_part}"
+        parts_info = []
         if custom_delay_seconds > 0:
-            update_status(f"ایجاد پاکت درخواست {request_id} (با تأخیر {custom_delay_seconds} ثانیه‌ای در رانر)...")
+            parts_info.append(f"تأخیر {custom_delay_seconds} ثانیه‌ای")
+        if custom_scroll_steps > 0:
+            parts_info.append(f"{custom_scroll_steps} مرحله اسکرول")
+        if parts_info:
+            update_status(f"ایجاد پاکت درخواست {request_id} (با {' و '.join(parts_info)} در رانر)...")
         else:
             update_status(f"ایجاد پاکت درخواست با شناسه: {request_id}")
 
@@ -187,6 +193,8 @@ class GitHubTransport:
             },
             "viewport": {"width": 1366, "height": 768},
             "custom_delay_seconds": custom_delay_seconds,
+            "auto_scroll": bool(custom_scroll_steps > 0),
+            "scroll_steps": custom_scroll_steps,
             "actions": actions or [],
             "intercepted_ajax": intercepted_ajax
             or {
@@ -401,6 +409,8 @@ class GitHubTransport:
             logger.exception("Unexpected error during fetch")
             return FetchResult(success=False, error_message=f"خطای غیرمنتظره: {str(e)}")
 
+    fetch_page = fetch
+
     def _upload_request_file(self, request_id: str, envelope: dict) -> Tuple[bool, str]:
         """Uploads requests/{request_id}.json via PUT /repos/{owner}/{repo}/contents/..."""
         owner, repo = self._parse_repo()
@@ -551,7 +561,9 @@ class GitHubTransport:
 
         start_time = time.time()
         timeout = self.config.timeout_seconds
-        interval = self.config.poll_interval_seconds
+        interval = getattr(self.config, "poll_interval_seconds", 1.0) or 1.0
+        if interval > 1.0:
+            interval = 1.0
 
         poll_count = 0
         while time.time() - start_time < timeout:
