@@ -1196,6 +1196,52 @@ class OfflineBrowserUI:
             }
           }, true);
 
+          // 2.5 YouTube Shorts Wheel & Keyboard Navigation
+          let wheelCooldown = false;
+          doc.addEventListener('wheel', (e) => {
+            const isShorts = (win.location && win.location.href && win.location.href.includes('/shorts/'))
+              || (window.shellApp && window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('/shorts/'));
+            if (!isShorts || wheelCooldown) return;
+
+            if (e.deltaY > 30) {
+              wheelCooldown = true;
+              setTimeout(() => { wheelCooldown = false; }, 2500);
+              const nextBtn = doc.querySelector('#navigation-button-down button, button[aria-label*="بعدی"], button[aria-label*="Next"]');
+              if (nextBtn) {
+                e.preventDefault();
+                nextBtn.click();
+              }
+            } else if (e.deltaY < -30) {
+              wheelCooldown = true;
+              setTimeout(() => { wheelCooldown = false; }, 2500);
+              const prevBtn = doc.querySelector('#navigation-button-up button, button[aria-label*="قبلی"], button[aria-label*="Previous"]');
+              if (prevBtn) {
+                e.preventDefault();
+                prevBtn.click();
+              }
+            }
+          }, { passive: false });
+
+          doc.addEventListener('keydown', (e) => {
+            const isShorts = (win.location && win.location.href && win.location.href.includes('/shorts/'))
+              || (window.shellApp && window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('/shorts/'));
+            if (!isShorts) return;
+
+            if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+              const nextBtn = doc.querySelector('#navigation-button-down button, button[aria-label*="بعدی"], button[aria-label*="Next"]');
+              if (nextBtn) {
+                e.preventDefault();
+                nextBtn.click();
+              }
+            } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+              const prevBtn = doc.querySelector('#navigation-button-up button, button[aria-label*="قبلی"], button[aria-label*="Previous"]');
+              if (prevBtn) {
+                e.preventDefault();
+                prevBtn.click();
+              }
+            }
+          });
+
           // 3. Form Submission Interception
           doc.addEventListener('submit', (e) => {
             e.preventDefault();
