@@ -48,6 +48,22 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             self.wfile.write(self.start_html.encode("utf-8"))
             return
 
+        if path in ("/logo.svg", "/assets/logo.svg"):
+            logo_file = Path(__file__).parent / "assets" / "logo.svg"
+            if not logo_file.exists():
+                desktop_logo = Path.home() / "Desktop" / "N0pperabo_logo_transparent.svg"
+                if desktop_logo.exists():
+                    logo_file = desktop_logo
+            if logo_file.exists():
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                with open(logo_file, "rb") as f:
+                    self.wfile.write(f.read())
+                return
+
         if path.startswith("/cache/"):
             rel_path = path[len("/cache/") :]
             file_path = self.cache_dir / rel_path
@@ -130,13 +146,13 @@ class OfflineBrowserUI:
         api = WebviewApiBridge(self)
 
         self.window = webview.create_window(
-            title="مرورگر آفلاین گیت‌هاب (GitHub Offline Browser)",
+            title="N0PPERABO - مرورگر آفلاین NTTM",
             url=url,
             js_api=api,
             width=1366,
             height=850,
             min_size=(1024, 700),
-            background_color="#0f172a",
+            background_color="#050608",
         )
         webview.start(debug=False)
 
@@ -365,158 +381,301 @@ class OfflineBrowserUI:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub Offline Browser</title>
+  <title>N0PPERABO - مرورگر آفلاین NTTM</title>
   <style>
     :root {
-      --bg-dark: #0f172a;
-      --bg-card: #1e293b;
-      --bg-card-hover: #334155;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
+      --bg-base: #06070a;
+      --bg-surface: #0a0d14;
+      --bg-surface-elevated: #111622;
+      --bg-glass: rgba(10, 13, 20, 0.85);
+      --bg-glass-card: rgba(17, 22, 34, 0.65);
+      --primary: #6366f1;
+      --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      --accent-cyan: #00f2fe;
+      --accent-purple: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
       --text: #f8fafc;
       --text-muted: #94a3b8;
-      --border: #334155;
-      --toolbar-height: 60px;
+      --text-dim: #64748b;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(0, 242, 254, 0.45);
+      --border-glow: 0 0 16px rgba(0, 242, 254, 0.25);
+      --toolbar-height: 64px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif; }
-    body { background: var(--bg-dark); color: var(--text); overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      user-select: none;
+    }
 
     /* Top Toolbar */
     .toolbar {
       height: var(--toolbar-height);
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
+      background: var(--bg-glass);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-bottom: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
       gap: 10px;
       padding: 0 16px;
       z-index: 100;
+      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Brand Logo & Name */
+    .brand-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
+    }
+    .brand-badge:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 18px rgba(0, 242, 254, 0.25);
+      transform: translateY(-1px);
+    }
+    .brand-logo-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 26px;
+    }
+    .toolbar-logo {
+      height: 24px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+      transition: filter 0.3s;
+    }
+    .brand-badge:hover .toolbar-logo {
+      filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.85));
+    }
+    .brand-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      background: linear-gradient(135deg, #ffffff 40%, #00f2fe 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Navigation Group */
+    .nav-group, .actions-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .btn-nav {
-      background: transparent;
-      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
       color: var(--text);
       width: 36px;
       height: 36px;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
-      transition: all 0.2s;
+      font-size: 14px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .btn-nav:hover { background: var(--bg-card-hover); border-color: var(--primary); }
+    .btn-nav:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
+      transform: translateY(-1px);
+      color: #fff;
+    }
+    .btn-nav:active {
+      transform: scale(0.95);
+    }
 
     /* Address Bar */
     .url-bar-container {
       flex: 1;
       display: flex;
       align-items: center;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
-      border-radius: 10px;
+      background: rgba(5, 7, 12, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
       padding: 4px 12px;
-      transition: border-color 0.2s;
+      gap: 8px;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      min-width: 200px;
     }
-    .url-bar-container:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+    .url-bar-container:focus-within {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 25px rgba(0, 242, 254, 0.25), inset 0 0 8px rgba(0, 242, 254, 0.05);
+      background: rgba(8, 11, 18, 0.95);
+    }
+    .url-icon {
+      font-size: 14px;
+      opacity: 0.6;
+    }
     .url-input {
       flex: 1;
       background: transparent;
       border: none;
       color: var(--text);
-      font-size: 14px;
+      font-size: 13.5px;
       outline: none;
       direction: ltr;
       text-align: left;
-      padding: 6px;
+      padding: 6px 4px;
+      user-select: text;
+    }
+    .url-input::placeholder {
+      color: var(--text-dim);
+      direction: rtl;
+      text-align: right;
     }
     .btn-go {
-      background: var(--primary);
-      color: #fff;
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      color: #030712;
       border: none;
-      padding: 6px 14px;
-      border-radius: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 13px;
-      font-weight: 600;
-      transition: background 0.2s;
+      font-weight: 700;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 2px 10px rgba(0, 242, 254, 0.3);
+      flex-shrink: 0;
     }
-    .btn-go:hover { background: var(--primary-hover); }
+    .btn-go:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(0, 242, 254, 0.5);
+      filter: brightness(1.1);
+    }
+    .btn-go:active {
+      transform: scale(0.96);
+    }
 
     /* Mode Toggle */
     .mode-toggle {
       display: flex;
       align-items: center;
-      gap: 6px;
-      background: var(--bg-dark);
-      padding: 4px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
+      gap: 7px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12.5px;
       user-select: none;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
     }
-    .mode-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
-    .mode-toggle.batch .mode-dot { background: var(--warning); }
+    .mode-toggle:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+    .mode-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+    .mode-toggle.batch .mode-dot {
+      background: var(--accent-amber);
+      box-shadow: 0 0 8px var(--accent-amber);
+    }
 
     /* Daemon Fast Mode Toggle */
     .daemon-btn {
       display: flex;
       align-items: center;
-      gap: 6px;
-      background: var(--bg-dark);
-      padding: 4px 10px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
+      gap: 7px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12.5px;
       user-select: none;
-      transition: all 0.2s;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
     }
-    .daemon-btn.active {
-      background: rgba(16, 185, 129, 0.15);
-      border-color: var(--success);
-      color: #34d399;
+    .daemon-btn:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
     }
     .daemon-dot {
-      width: 10px;
-      height: 10px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
       background: #64748b;
-      transition: background 0.3s;
+      transition: all 0.3s;
+    }
+    .daemon-btn.active {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.5);
+      color: #34d399;
+      box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
     }
     .daemon-btn.active .daemon-dot {
-      background: var(--success);
-      box-shadow: 0 0 8px #10b981;
-      animation: pulse 1.5s infinite;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px #10b981;
+      animation: radarPulse 1.8s infinite;
     }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    @keyframes radarPulse {
+      0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
 
     /* Custom Delay Controls */
     .delay-container {
       display: flex;
       align-items: center;
       gap: 6px;
-      background: var(--bg-dark);
-      padding: 4px 8px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      transition: all 0.2s;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
+    }
+    .delay-container:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.2);
     }
     .delay-container.active {
-      border-color: #f59e0b;
-      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.5);
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
     }
     .delay-btn {
       display: flex;
       align-items: center;
       gap: 5px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12.5px;
       user-select: none;
       color: var(--text-muted);
       transition: color 0.2s;
@@ -529,17 +688,17 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 4px;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--border-subtle);
       padding-right: 6px;
       margin-right: 2px;
     }
     .delay-input-box input {
       width: 44px;
-      background: var(--bg-card);
+      background: rgba(6, 8, 13, 0.9);
       border: 1px solid #475569;
       color: #fbbf24;
       padding: 2px 4px;
-      border-radius: 4px;
+      border-radius: 6px;
       font-size: 12px;
       font-weight: bold;
       text-align: center;
@@ -547,31 +706,41 @@ class OfflineBrowserUI:
       direction: ltr;
     }
 
-    /* Quick Action Buttons */
+    /* Action Buttons */
     .action-btn {
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
       color: var(--text);
-      padding: 6px 10px;
-      border-radius: 8px;
-      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 10px;
       cursor: pointer;
+      font-size: 12.5px;
       display: flex;
       align-items: center;
       gap: 5px;
-      transition: all 0.2s;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
     }
-    .action-btn:hover { background: var(--bg-card-hover); }
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+    .action-btn:active {
+      transform: scale(0.96);
+    }
 
-    /* Action Queue Bar (Batch Mode) */
+    /* Batch Queue Bar */
     .queue-bar {
-      background: #182234;
-      border-bottom: 1px solid var(--border);
-      padding: 8px 16px;
       display: none;
+      background: rgba(17, 22, 34, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 8px 16px;
       align-items: center;
       gap: 12px;
-      font-size: 13px;
+      z-index: 90;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
     .queue-bar.active { display: flex; }
     .queue-items {
@@ -579,132 +748,165 @@ class OfflineBrowserUI:
       display: flex;
       gap: 8px;
       overflow-x: auto;
-      white-space: nowrap;
-      padding-bottom: 4px;
+      padding: 2px 0;
     }
     .queue-badge {
-      background: var(--bg-card);
-      border: 1px solid #475569;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
       padding: 4px 10px;
-      border-radius: 6px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      border-radius: 8px;
       font-size: 12px;
-    }
-    .btn-run-batch {
-      background: var(--success);
-      color: #fff;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
+      white-space: nowrap;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .btn-run-batch:hover { opacity: 0.9; }
+    .btn-run-batch {
+      background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3);
+      transition: all 0.2s;
+    }
+    .btn-run-batch:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
 
-    /* Loading / Status Bar */
+    /* Status Bar & Cyber Spinner */
     .status-bar {
-      background: #1e3a8a;
-      color: #bfdbfe;
-      padding: 6px 16px;
-      font-size: 12px;
       display: none;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      background: rgba(10, 13, 20, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0, 242, 254, 0.3);
+      padding: 10px 20px;
+      font-size: 13px;
+      color: #38bdf8;
+      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.15);
+      animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .status-bar.active { display: flex; }
     .spinner {
-      width: 14px;
-      height: 14px;
-      border: 2px solid #bfdbfe;
-      border-top-color: transparent;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0, 242, 254, 0.2);
+      border-top-color: #00f2fe;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: cyberSpin 0.7s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes cyberSpin { to { transform: rotate(360deg); } }
+    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
     /* Frame Container */
-    .frame-container { flex: 1; position: relative; background: #fff; }
-    iframe { width: 100%; height: 100%; border: none; }
+    .frame-container { flex: 1; position: relative; background: #000; }
+    iframe { width: 100%; height: 100%; border: none; background: #000; }
 
     /* Toast Notification */
     .toast {
       position: fixed;
-      bottom: 20px;
-      left: 20px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      color: var(--text);
+      bottom: 24px;
+      right: 24px;
+      background: rgba(14, 18, 27, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--accent-cyan);
+      color: #fff;
       padding: 12px 20px;
-      border-radius: 10px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-      z-index: 1000;
+      border-radius: 12px;
+      font-size: 13.5px;
+      z-index: 9999;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 254, 0.25);
       display: none;
       align-items: center;
-      gap: 12px;
-      max-width: 450px;
-      animation: slideUp 0.3s ease;
+      animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .toast.error { border-color: var(--danger); color: #fca5a5; }
-    .toast.file { border-color: var(--success); color: #86efac; }
-    @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast.error { border-color: var(--accent-rose); box-shadow: 0 0 20px rgba(244, 63, 94, 0.3); }
+    .toast.file { border-color: var(--accent-emerald); box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+    @keyframes toastIn { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
     /* Settings Modal */
-    .modal-overlay {
+    .modal-backdrop {
       position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      backdrop-filter: blur(4px);
-      z-index: 2000;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(16px);
       display: none;
       align-items: center;
       justify-content: center;
+      z-index: 10000;
     }
-    .modal-overlay.open { display: flex; }
-    .modal {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      background: #0b0e17;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 18px;
       width: 520px;
       max-width: 90%;
-      padding: 24px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+      padding: 28px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.15);
+      animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .modal h2 { margin-bottom: 16px; font-size: 18px; color: var(--text); }
-    .form-group { margin-bottom: 14px; }
-    .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
+    @keyframes modalPop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-card h2 {
+      font-size: 18px;
+      color: #fff;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12.5px; color: var(--text-muted); margin-bottom: 6px; }
     .form-group input {
       width: 100%;
-      background: var(--bg-dark);
-      border: 1px solid var(--border);
+      background: rgba(5, 7, 12, 0.9);
+      border: 1px solid var(--border-subtle);
       color: var(--text);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
       outline: none;
       direction: ltr;
       text-align: left;
+      transition: all 0.2s;
     }
-    .form-group input:focus { border-color: var(--primary); }
-    .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .form-group input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.25);
+    }
+    .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
   </style>
 </head>
 <body>
 
   <!-- Top Toolbar -->
   <div class="toolbar">
-    <button class="btn-nav" title="بازگشت" onclick="window.pywebview.api.go_back()">❮</button>
-    <button class="btn-nav" title="جلو" onclick="window.pywebview.api.go_forward()">❯</button>
-    <button class="btn-nav" title="تازه‌سازی" onclick="window.pywebview.api.reload()">↻</button>
-    <button class="btn-nav" title="صفحه شروع" onclick="window.pywebview.api.go_home()">🏠</button>
+    <div class="brand-badge" title="N0PPERABO - NTTM Engine" onclick="window.pywebview.api.go_home()">
+      <div class="brand-logo-container">
+        <img src="/assets/logo.svg" alt="N0pperabo" class="toolbar-logo" />
+      </div>
+      <span class="brand-title">N0PPERABO</span>
+    </div>
+
+    <div class="nav-group">
+      <button class="btn-nav" title="بازگشت" onclick="window.pywebview.api.go_back()">❮</button>
+      <button class="btn-nav" title="جلو" onclick="window.pywebview.api.go_forward()">❯</button>
+      <button class="btn-nav" title="تازه‌سازی" onclick="window.pywebview.api.reload()">↻</button>
+      <button class="btn-nav" title="صفحه شروع" onclick="window.pywebview.api.go_home()">🏠</button>
+    </div>
 
     <div class="url-bar-container">
-      <input type="text" id="url-bar" class="url-input" placeholder="آدرس سایت (مثال: https://wikipedia.org) یا کلمه جستجو..." />
+      <span class="url-icon">🌐</span>
+      <input type="text" id="url-bar" class="url-input" placeholder="آدرس سایت (مثال: https://wikipedia.org) یا عبارت جستجو..." />
       <button class="btn-go" onclick="window.shellApp.onGoClick()">ارسال / Go</button>
     </div>
 
@@ -732,14 +934,16 @@ class OfflineBrowserUI:
       </div>
     </div>
 
-    <button class="action-btn" title="پوشه فایل‌های دانلود شده" onclick="window.pywebview.api.open_downloads_folder()">📁 دانلودها</button>
-    <button class="action-btn" title="پاکسازی کوکی‌ها و سشن ذخیره شده" onclick="window.pywebview.api.clear_session()">🧹 پاکسازی نشست</button>
-    <button class="action-btn" title="تنظیمات مخزن و توکن گیت‌هاب" onclick="window.shellApp.openSettings()">⚙️ تنظیمات</button>
+    <div class="actions-group">
+      <button class="action-btn" title="پوشه فایل‌های دانلود شده" onclick="window.pywebview.api.open_downloads_folder()">📁 دانلودها</button>
+      <button class="action-btn" title="پاکسازی کوکی‌ها و سشن ذخیره شده" onclick="window.pywebview.api.clear_session()">🧹 نشست</button>
+      <button class="action-btn" title="تنظیمات مخزن و توکن گیت‌هاب" onclick="window.shellApp.openSettings()">⚙️ تنظیمات</button>
+    </div>
   </div>
 
   <!-- Action Queue Bar (Batch Mode) -->
   <div id="queue-bar" class="queue-bar">
-    <span style="font-weight: 600; color: var(--warning);">صف اکشن‌ها:</span>
+    <span style="font-weight: 600; color: var(--accent-amber);">صف اکشن‌ها:</span>
     <div id="queue-items" class="queue-items">
       <span style="color: var(--text-muted); font-size: 12px;">روی المنت‌های صفحه کلیک یا تایپ کنید تا به صف اضافه شوند...</span>
     </div>
@@ -759,18 +963,16 @@ class OfflineBrowserUI:
     <iframe id="content-frame" src="/start" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
   </div>
 
-  <!-- Toast Notification -->
-  <div id="toast" class="toast">
-    <span id="toast-text">پیام</span>
-  </div>
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
 
   <!-- Settings Modal -->
-  <div id="settings-modal" class="modal-overlay">
-    <div class="modal">
-      <h2>تنظیمات اتصال به گیت‌هاب</h2>
+  <div id="settings-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2>⚙️ تنظیمات اتصال به GitHub NTTM</h2>
       <div class="form-group">
-        <label>توکن دسترسی شخصی گیت‌هاب (Personal Access Token - PAT):</label>
-        <input type="password" id="cfg-token" placeholder="ghp_... با دسترسی repo و workflow" />
+        <label>توکن شخصی گیت‌هاب (Personal Access Token - PAT):</label>
+        <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxx" />
       </div>
       <div class="form-group">
         <label>نام مخزن گیت‌هاب (GitHub Repository):</label>
@@ -795,7 +997,7 @@ class OfflineBrowserUI:
     </div>
   </div>
 
-  <script>
+    <script>
     class ShellApp {
       constructor() {
         this.urlBar = document.getElementById('url-bar');
@@ -1311,7 +1513,7 @@ class OfflineBrowserUI:
 """
 
     def _generate_start_page_html(self) -> str:
-        token_status = "✅ تنظیم شده" if self.config.github_token else "❌ تنظیم نشده"
+        token_status = "✅ فعال و متصل" if self.config.github_token else "❌ تنظیم نشده"
         repo_status = self.config.github_repo if self.config.github_repo else "❌ تنظیم نشده"
         cookies_count = len(self.session_manager.cookies)
 
@@ -1319,123 +1521,353 @@ class OfflineBrowserUI:
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>صفحه شروع مرورگر آفلاین گیت‌هاب</title>
+  <title>N0PPERABO - NTTM Dashboard</title>
   <style>
-    body {{ font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; margin: 0; }}
-    .container {{ max-width: 850px; margin: 0 auto; }}
-    .header {{ text-align: center; margin-bottom: 35px; }}
-    h1 {{ font-size: 28px; color: #3b82f6; margin-bottom: 8px; }}
-    p.lead {{ color: #94a3b8; font-size: 15px; line-height: 1.6; }}
-    
-    /* Search Box */
+    :root {{
+      --bg-base: #050608;
+      --bg-surface: #0a0d14;
+      --bg-card: rgba(13, 17, 26, 0.72);
+      --bg-card-hover: rgba(20, 27, 42, 0.85);
+      --primary: #00f2fe;
+      --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      --accent-purple: #8b5cf6;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: 0 0 20px rgba(0, 242, 254, 0.25);
+    }}
+    * {{
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
+    }}
+    body {{
+      background-color: var(--bg-base);
+      background-image:
+        radial-gradient(ellipse at 50% 0%, rgba(0, 242, 254, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 20% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 60px;
+      overflow-x: hidden;
+      user-select: none;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto;
+    }}
+
+    /* Hero Section */
+    .hero-section {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 35px;
+      position: relative;
+    }}
+    .hero-logo-wrapper {{
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }}
+    .hero-logo-glow {{
+      position: absolute;
+      width: 320px;
+      height: 120px;
+      background: radial-gradient(ellipse, rgba(0, 242, 254, 0.35) 0%, rgba(99, 102, 241, 0.2) 40%, transparent 70%);
+      filter: blur(30px);
+      z-index: 1;
+      animation: pulseGlow 4s ease-in-out infinite alternate;
+    }}
+    @keyframes pulseGlow {{
+      0% {{ opacity: 0.5; transform: scale(0.9); }}
+      100% {{ opacity: 0.9; transform: scale(1.15); }}
+    }}
+    .hero-logo {{
+      position: relative;
+      z-index: 2;
+      width: 300px;
+      max-width: 85vw;
+      height: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 35px rgba(0, 242, 254, 0.4));
+      animation: floatLogo 5s ease-in-out infinite alternate;
+    }}
+    @keyframes floatLogo {{
+      0% {{ transform: translateY(0px); }}
+      100% {{ transform: translateY(-7px); }}
+    }}
+    .hero-title {{
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #fff;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }}
+    .gradient-text {{
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }}
+    .hero-lead {{
+      color: var(--text-muted);
+      font-size: 14.5px;
+      line-height: 1.6;
+      max-width: 650px;
+      margin: 0 auto;
+    }}
+
+    /* Search Card */
     .search-card {{
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 14px;
+      background: var(--bg-card);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
       padding: 24px;
       margin-bottom: 30px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 242, 254, 0.08);
+      transition: all 0.3s;
+    }}
+    .search-card:focus-within {{
+      border-color: rgba(0, 242, 254, 0.45);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(0, 242, 254, 0.18);
     }}
     .search-input-group {{
       display: flex;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     }}
     .search-input-group input {{
       flex: 1;
-      background: #0f172a;
-      border: 1px solid #475569;
+      background: rgba(6, 8, 14, 0.9);
+      border: 1px solid var(--border-subtle);
       color: #fff;
-      padding: 12px 16px;
-      border-radius: 10px;
+      padding: 14px 18px;
+      border-radius: 12px;
       font-size: 15px;
       outline: none;
       direction: rtl;
+      transition: all 0.25s;
     }}
-    .search-input-group input:focus {{ border-color: #3b82f6; }}
+    .search-input-group input:focus {{
+      border-color: var(--primary);
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.2);
+    }}
     .btn-search {{
-      background: #3b82f6;
-      color: #fff;
+      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+      color: #030712;
       border: none;
-      padding: 0 24px;
-      border-radius: 10px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-    }}
-    .btn-search:hover {{ background: #2563eb; }}
-
-    /* Quick Links */
-    .quick-links {{ display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }}
-    .quick-link {{
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: #cbd5e1;
-      padding: 8px 16px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-size: 13px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }}
-    .quick-link:hover {{ background: #334155; color: #fff; border-color: #3b82f6; }}
-
-    /* Guide & Status */
-    .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
-    .card {{
-      background: #1e293b;
-      border: 1px solid #334155;
+      padding: 0 28px;
       border-radius: 12px;
-      padding: 20px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }}
+    .btn-search:hover {{
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(0, 242, 254, 0.5);
+      filter: brightness(1.1);
+    }}
+    .btn-search:active {{
+      transform: scale(0.97);
+    }}
+
+    /* Quick Access Grid */
+    .quick-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 30px;
+    }}
+    .quick-card {{
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      padding: 14px 12px;
+      border-radius: 14px;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      text-align: center;
+    }}
+    .quick-card:hover {{
+      background: var(--bg-card-hover);
+      border-color: var(--primary);
+      box-shadow: 0 8px 25px rgba(0, 242, 254, 0.2);
+      transform: translateY(-3px);
+    }}
+    .quick-icon {{
+      font-size: 24px;
+      line-height: 1;
+    }}
+    .quick-name {{
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }}
+
+    /* Info Grid */
+    .info-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }}
+    @media (max-width: 720px) {{
+      .info-grid {{ grid-template-columns: 1fr; }}
+    }}
+    .info-card {{
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 22px;
       font-size: 13px;
       line-height: 1.7;
       color: #cbd5e1;
+      transition: all 0.25s;
     }}
-    .card h3 {{ color: #38bdf8; margin-top: 0; margin-bottom: 10px; font-size: 16px; }}
-    .badge {{ display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }}
-    .badge-ok {{ background: rgba(16, 185, 129, 0.2); color: #34d399; }}
-    .badge-warn {{ background: rgba(245, 158, 11, 0.2); color: #fbbf24; }}
+    .info-card:hover {{
+      border-color: rgba(255, 255, 255, 0.16);
+      transform: translateY(-2px);
+    }}
+    .info-card h3 {{
+      color: var(--primary);
+      margin-bottom: 12px;
+      font-size: 15.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+    }}
+    .badge {{
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .badge-ok {{
+      background: rgba(16, 185, 129, 0.18);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }}
+    .badge-warn {{
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }}
+    .cfg-link {{
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s;
+    }}
+    .cfg-link:hover {{
+      color: #7dd3fc;
+      text-decoration: underline;
+    }}
+
+    /* Footer */
+    .footer {{
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 1px;
+      margin-top: 10px;
+    }}
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1>مرورگر آفلاین گیت‌هاب</h1>
-      <p class="lead">وب‌گردی، بازپخش تعاملات SPA، حفظ سشن‌ها و دانلود فایل‌های حجیم ۵۰ مگابایتی فقط از طریق GitHub</p>
+    <div class="hero-section">
+      <div class="hero-logo-wrapper">
+        <div class="hero-logo-glow"></div>
+        <img src="/assets/logo.svg" alt="N0pperabo Logo" class="hero-logo" />
+      </div>
+      <h1 class="hero-title">N0PPERABO <span class="gradient-text">BROWSER</span></h1>
+      <p class="hero-lead">مرورگر آفلاین ضدتحریم و ناشناس • اتصال مستقیم از طریق GitHub Actions Runner • امنیت رمزنگاری شده</p>
     </div>
 
     <!-- Search Section -->
     <div class="search-card">
       <div class="search-input-group">
-        <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن نشانی کامل سایت..." onkeydown="if(event.key==='Enter') doSearch()" />
+        <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن آدرس وبسایت..." onkeydown="if(event.key==='Enter') doSearch()" />
         <button class="btn-search" onclick="doSearch()">جستجو در وب</button>
       </div>
-      <div class="quick-links">
-        <a class="quick-link" onclick="quickNav('https://www.google.com')">🔍 گوگل (Google)</a>
-        <a class="quick-link" onclick="quickNav('https://duckduckgo.com')">🦆 داک‌داک‌گو (DuckDuckGo)</a>
-        <a class="quick-link" onclick="quickNav('https://fa.wikipedia.org')">📖 ویکی‌پدیا فارسی</a>
-        <a class="quick-link" onclick="quickNav('https://github.com/explore')">🐙 گیت‌هاب (GitHub)</a>
-        <a class="quick-link" onclick="quickNav('https://stackoverflow.com')">💻 استک اورفلو</a>
+    </div>
+
+    <!-- Quick Access Grid -->
+    <div class="quick-grid">
+      <div class="quick-card" onclick="quickNav('https://www.google.com')">
+        <span class="quick-icon">🔍</span>
+        <span class="quick-name">Google</span>
+      </div>
+      <div class="quick-card" onclick="quickNav('https://duckduckgo.com')">
+        <span class="quick-icon">🦆</span>
+        <span class="quick-name">DuckDuckGo</span>
+      </div>
+      <div class="quick-card" onclick="quickNav('https://www.youtube.com')">
+        <span class="quick-icon">▶️</span>
+        <span class="quick-name">YouTube</span>
+      </div>
+      <div class="quick-card" onclick="quickNav('https://fa.wikipedia.org')">
+        <span class="quick-icon">📖</span>
+        <span class="quick-name">Wikipedia</span>
+      </div>
+      <div class="quick-card" onclick="quickNav('https://github.com/explore')">
+        <span class="quick-icon">🐙</span>
+        <span class="quick-name">GitHub</span>
+      </div>
+      <div class="quick-card" onclick="quickNav('https://stackoverflow.com')">
+        <span class="quick-icon">💻</span>
+        <span class="quick-name">Stack Overflow</span>
       </div>
     </div>
 
     <!-- Info Grid -->
-    <div class="grid">
-      <div class="card">
-        <h3>راهنمای دو حالت کارکرد</h3>
+    <div class="info-grid">
+      <div class="info-card">
+        <h3>⚡ راهنمای دو حالت کارکرد</h3>
         <p><strong>۱. حالت مستقیم (Direct Mode):</strong> با کلیک روی هر لینک، دکمه یا ارسال فرم، تغییرات بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
-        <p><strong>۲. حالت زنجیره‌ای (Batch Mode):</strong> مناسب برای فرم‌های ورود و وب‌اپلیکیشن‌های تک‌صفحه‌ای (SPA). چندین کلیک و تایپ را پشت سر هم ثبت کنید و با زدن دکمه 🚀 همه را در یک اجرای رانر در گیت‌هاب اجرا کنید.</p>
+        <p><strong>۲. حالت زنجیره‌ای (Batch Mode):</strong> مناسب برای فرم‌های ورود و وب‌اپلیکیشن‌های تک‌صفحه‌ای (SPA). چندین کلیک و تایپ را پشت سر هم ثبت کنید و با زدن دکمه 🚀 همه را در یک رانر اجرا کنید.</p>
       </div>
 
-      <div class="card">
-        <h3>وضعیت اتصال و نشست‌ها</h3>
-        <p><strong>توکن PAT:</strong> <span class="badge badge-ok">{token_status}</span></p>
-        <p><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#60a5fa;">{repo_status}</span></p>
-        <p><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
-        <p style="margin-top:10px;"><a style="color:#38bdf8;cursor:pointer;text-decoration:underline;" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات اتصال</a></p>
+      <div class="info-card">
+        <h3>🛡️ وضعیت سلامت اتصال</h3>
+        <p style="margin-bottom: 6px;"><strong>توکن دسترسی PAT:</strong> <span class="badge badge-ok">{token_status}</span></p>
+        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#38bdf8; font-family: monospace;">{repo_status}</span></p>
+        <p style="margin-bottom: 12px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
+        <p><a class="cfg-link" onclick="parent.window.shellApp.openSettings()">⚙️ تغییر تنظیمات و کلیدهای ارتباطی</a></p>
       </div>
+    </div>
+
+    <div class="footer">
+      N0PPERABO • NTTM SECURE TUNNEL ENGINE • STEALTH PLAYWRIGHT CORE
     </div>
   </div>
 
