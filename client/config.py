@@ -7,6 +7,15 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger("BrowserConfig")
 
 
+def get_effective_key(user_key: Optional[str] = None) -> str:
+    """
+    Returns effective key from user_key, falling back to standard NTTM secure salt key.
+    """
+    from .crypto import get_effective_key as _get_eff_key
+
+    return _get_eff_key(user_key)
+
+
 @dataclass
 class BrowserConfig:
     """
@@ -30,6 +39,13 @@ class BrowserConfig:
             downloads = home / "Downloads" / "GitHubBrowser"
             downloads.mkdir(parents=True, exist_ok=True)
             self.downloads_dir = str(downloads)
+
+    def get_effective_key(self) -> str:
+        """
+        Returns the effective AES-256-GCM encryption key.
+        If user has not configured a custom key, returns the standard secure project key.
+        """
+        return get_effective_key(self.encryption_key)
 
     @classmethod
     def get_config_path(cls) -> Path:

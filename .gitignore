@@ -13,6 +13,7 @@ ENV/
 work/
 payload.zip*
 manifest.json
+*.zip
 
 # Node
 node_modules/

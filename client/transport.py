@@ -1,9 +1,11 @@
 import base64
+import concurrent.futures
 import hashlib
 import json
 import logging
 import os
 import shutil
+import threading
 import time
 import urllib.parse
 import uuid
@@ -16,7 +18,14 @@ import requests
 
 from .config import BrowserConfig
 from .session_manager import SessionManager
-from .crypto import encrypt_bytes, decrypt_bytes, is_encrypted
+from .crypto import (
+    encrypt_bytes,
+    decrypt_bytes,
+    encrypt_envelope,
+    decrypt_envelope,
+    is_encrypted,
+    get_effective_key,
+)
 
 logger = logging.getLogger("GitHubTransport")
 
@@ -31,6 +40,47 @@ class FetchResult:
     downloaded_file_path: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     error_message: str = ""
+
+
+class ParallelProgressTracker:
+    """Thread-safe progress reporter for parallel chunk downloads."""
+
+    def __init__(self, parts: List[Dict[str, Any]], status_cb: Callable[[str], None]):
+        self.total_parts = len(parts)
+        self.part_sizes = {p["filename"]: p.get("size", 0) for p in parts}
+        self.total_bytes = sum(self.part_sizes.values())
+        self.downloaded_per_part = {p["filename"]: 0 for p in parts}
+        self.completed_parts: set = set()
+        self.status_cb = status_cb
+        self._lock = threading.Lock()
+        self._last_report_time = 0.0
+        self._last_reported_pct = -1
+
+    def on_bytes(self, filename: str, downloaded_bytes: int):
+        with self._lock:
+            self.downloaded_per_part[filename] = downloaded_bytes
+            total_dl = sum(self.downloaded_per_part.values())
+            now = time.time()
+            if self.total_bytes > 0:
+                pct = min(100, int((total_dl / self.total_bytes) * 100))
+                # Throttle callbacks to avoid flooding UI (every 2% or 0.4s)
+                if (pct >= self._last_reported_pct + 2 or (now - self._last_report_time) >= 0.4) and pct != self._last_reported_pct:
+                    self._last_reported_pct = pct
+                    self._last_report_time = now
+                    done_count = len(self.completed_parts)
+                    dl_mb = total_dl / (1024 * 1024)
+                    tot_mb = self.total_bytes / (1024 * 1024)
+                    self.status_cb(
+                        f"دانلود موازی قطعات: {pct}% ({dl_mb:.1f}/{tot_mb:.1f} MB) - {done_count}/{self.total_parts} قطعه"
+                    )
+
+    def on_complete(self, filename: str):
+        with self._lock:
+            self.completed_parts.add(filename)
+            if self.part_sizes.get(filename, 0) > 0:
+                self.downloaded_per_part[filename] = self.part_sizes[filename]
+            done_count = len(self.completed_parts)
+            self.status_cb(f"قطعه {filename} با موفقیت دریافت شد ({done_count}/{self.total_parts}).")
 
 
 class GitHubTransport:
@@ -184,7 +234,7 @@ class GitHubTransport:
                     error_message=f"خطا در دریافت پاسخ از رانر: {poll_err}",
                 )
 
-            # 6. Download manifest and chunks
+            # 6. Download manifest and chunks in parallel (max_workers=6)
             update_status("دریافت فایل مانیفست و شروع دانلود قطعات...")
             cache_req_dir = self.cache_base / request_id
             cache_req_dir.mkdir(parents=True, exist_ok=True)
@@ -211,24 +261,20 @@ class GitHubTransport:
                     error_message="مانیفست فاقد قطعات فشرده (parts) است.",
                 )
 
-            # Download each chunk
-            part_paths = []
-            for idx, part_info in enumerate(parts):
-                part_name = part_info["filename"]
-                expected_sha = part_info["sha256"]
-                part_asset = self._find_asset(release_data, part_name)
-                if not part_asset:
-                    return FetchResult(
-                        success=False,
-                        error_message=f"قطعه {part_name} در رلیس گیت‌هاب موجود نیست.",
-                    )
-
-                part_dest = cache_req_dir / part_name
-                update_status(f"دانلود قطعه {idx + 1} از {len(parts)} ({part_name})...")
-                self._download_chunk_with_retry(
-                    part_asset, part_dest, expected_sha, update_status, part_name
+            # Concurrent parallel download of 50MB chunks
+            try:
+                part_paths = self._download_chunks_parallel(
+                    release_data=release_data,
+                    parts=parts,
+                    cache_req_dir=cache_req_dir,
+                    update_status=update_status,
+                    max_workers=6,
                 )
-                part_paths.append(part_dest)
+            except Exception as dl_err:
+                return FetchResult(
+                    success=False,
+                    error_message=f"خطا در دانلود موازی قطعات رلیس: {dl_err}",
+                )
 
             # 7. Assemble chunks into payload.zip
             update_status("در حال سرهم‌بندی قطعات و اعتبارسنجی آرشیو...")
@@ -252,7 +298,7 @@ class GitHubTransport:
             if is_encrypted(assembled_bytes):
                 update_status("در حال رمزگشایی بسته پاسخ با کلید اختصاصی AES-256-GCM...")
                 try:
-                    decrypted_zip = decrypt_bytes(assembled_bytes, self.config.encryption_key)
+                    decrypted_zip = decrypt_envelope(assembled_bytes, self.config.encryption_key)
                     with open(assembled_zip_path, "wb") as f:
                         f.write(decrypted_zip)
                 except Exception as dec_err:
@@ -344,11 +390,8 @@ class GitHubTransport:
         owner, repo = self._parse_repo()
         url = f"{self.api_base}/repos/{owner}/{repo}/contents/requests/{request_id}.json"
 
-        raw_json_bytes = json.dumps(envelope, ensure_ascii=False, indent=2).encode("utf-8")
-        if self.config.encryption_key:
-            content_bytes = encrypt_bytes(raw_json_bytes, self.config.encryption_key)
-        else:
-            content_bytes = raw_json_bytes
+        # Mandatory AES-256-GCM encryption on all request envelopes
+        content_bytes = encrypt_envelope(envelope, self.config.encryption_key)
         content_b64 = base64.b64encode(content_bytes).decode("utf-8")
 
         payload = {
@@ -532,6 +575,94 @@ class GitHubTransport:
                 return asset
         return None
 
+    def _download_chunks_parallel(
+        self,
+        release_data: dict,
+        parts: List[Dict[str, Any]],
+        cache_req_dir: Path,
+        update_status: Callable[[str], None],
+        max_workers: int = 6,
+    ) -> List[Path]:
+        """
+        Downloads release chunks concurrently with ThreadPoolExecutor(max_workers=6),
+        verifies SHA-256 integrity for each chunk with retries, tracks aggregate live
+        progress, and returns the ordered list of part paths.
+        """
+        if not parts:
+            raise ValueError("مانیفست فاقد قطعات فشرده است.")
+
+        part_assets = {}
+        for part_info in parts:
+            part_name = part_info["filename"]
+            part_asset = self._find_asset(release_data, part_name)
+            if not part_asset:
+                raise FileNotFoundError(f"قطعه {part_name} در رلیس گیت‌هاب موجود نیست.")
+            part_assets[part_name] = (part_info, part_asset)
+
+        num_parts = len(parts)
+        effective_workers = min(max_workers, num_parts)
+        tracker = ParallelProgressTracker(parts, update_status)
+        update_status(f"شروع دانلود موازی {num_parts} قطعه با {effective_workers} اتصال همزمان...")
+
+        part_paths: Dict[str, Path] = {}
+
+        def fetch_single_part(part_name: str) -> Tuple[str, Path]:
+            part_info, part_asset = part_assets[part_name]
+            expected_sha = part_info["sha256"]
+            part_dest = cache_req_dir / part_name
+
+            def on_bytes(dl_bytes: int):
+                tracker.on_bytes(part_name, dl_bytes)
+
+            self._download_chunk_with_retry(
+                part_asset,
+                part_dest,
+                expected_sha,
+                status_cb=update_status,
+                label=part_name,
+                progress_hook=on_bytes,
+            )
+            tracker.on_complete(part_name)
+            return part_name, part_dest
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=effective_workers) as executor:
+            future_to_part = {
+                executor.submit(fetch_single_part, p["filename"]): p["filename"]
+                for p in parts
+            }
+            for future in concurrent.futures.as_completed(future_to_part):
+                p_name = future_to_part[future]
+                try:
+                    name, dest = future.result()
+                    part_paths[name] = dest
+                except Exception as exc:
+                    for f in future_to_part:
+                        f.cancel()
+                    raise RuntimeError(f"خطا در دانلود موازی قطعه {p_name}: {exc}") from exc
+
+        # Return ordered parts according to manifest
+        return [part_paths[p["filename"]] for p in parts]
+
+    def _download_release_asset(
+        self,
+        asset: dict,
+        dest_path: Path,
+        expected_sha: str = "",
+        status_cb: Optional[Callable[[str], None]] = None,
+        label: str = "",
+        max_retries: int = 5,
+        progress_hook: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        """Downloads a single release asset with optional retry, resume and SHA-256 verification."""
+        cb = status_cb or (lambda msg: None)
+        lbl = label or asset.get("name", "asset")
+        if expected_sha:
+            self._download_chunk_with_retry(
+                asset, dest_path, expected_sha, cb, lbl, max_retries=max_retries, progress_hook=progress_hook
+            )
+        else:
+            self._download_file_resumable(asset, dest_path, cb, lbl, progress_hook=progress_hook)
+
     def _download_chunk_with_retry(
         self,
         asset: dict,
@@ -540,11 +671,12 @@ class GitHubTransport:
         status_cb: Callable[[str], None],
         label: str,
         max_retries: int = 5,
+        progress_hook: Optional[Callable[[int], None]] = None,
     ) -> None:
         """Downloads a chunk with HTTP Range Resume and SHA-256 verification up to 5 retries."""
         for attempt in range(1, max_retries + 1):
             try:
-                self._download_file_resumable(asset, dest_path, status_cb, label)
+                self._download_file_resumable(asset, dest_path, status_cb, label, progress_hook=progress_hook)
                 actual_sha = self._compute_sha256(dest_path)
                 if actual_sha.lower() == expected_sha.lower():
                     return  # Match!
@@ -558,7 +690,7 @@ class GitHubTransport:
                 logger.warning(
                     f"Download failure for {label} on attempt {attempt}: {e}. Retrying..."
                 )
-                time.sleep(2.0 * attempt)
+                time.sleep(1.5 * attempt)
 
         raise RuntimeError(f"دانلود قطعه {label} پس از {max_retries} تلاش ناموفق بود.")
 
@@ -568,6 +700,7 @@ class GitHubTransport:
         dest_path: Path,
         status_cb: Callable[[str], None],
         label: str,
+        progress_hook: Optional[Callable[[int], None]] = None,
     ) -> None:
         """Performs resumable download of an asset with Range header."""
         asset_url = asset.get("url")
@@ -577,6 +710,8 @@ class GitHubTransport:
         total_size = asset.get("size", 0)
 
         if existing_size > 0 and existing_size == total_size:
+            if progress_hook:
+                progress_hook(existing_size)
             return
 
         headers = self._get_headers()
@@ -601,7 +736,9 @@ class GitHubTransport:
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
-                        if total_size > 0:
+                        if progress_hook:
+                            progress_hook(downloaded)
+                        elif total_size > 0:
                             pct = min(100, int((downloaded / total_size) * 100))
                             if downloaded % (5 * 1024 * 1024) == 0:  # Report every 5MB
                                 status_cb(f"دانلود {label}: {pct}%")
@@ -612,12 +749,12 @@ class GitHubTransport:
         with open(output_path, "wb") as outfile:
             for part in sorted_parts:
                 with open(part, "rb") as infile:
-                    shutil.copyfileobj(infile, outfile, length=1024 * 1024)
+                    shutil.copyfileobj(infile, outfile, length=4 * 1024 * 1024)
 
     def _compute_sha256(self, file_path: Path) -> str:
         sha256 = hashlib.sha256()
         with open(file_path, "rb") as f:
-            while chunk := f.read(1024 * 1024):
+            while chunk := f.read(4 * 1024 * 1024):
                 sha256.update(chunk)
         return sha256.hexdigest()
 

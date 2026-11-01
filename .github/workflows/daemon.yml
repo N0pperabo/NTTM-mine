@@ -57,3 +57,11 @@ jobs:
           BRANCH: ${{ github.ref_name }}
         run: |
           node scripts/daemon_runner.mjs
+
+      - name: Auto Janitor (Clean up old releases)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node -e "import('./scripts/daemon_runner.mjs').then(m => m.autoJanitorCleanupReleases && m.autoJanitorCleanupReleases())" || true

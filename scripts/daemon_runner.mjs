@@ -1,31 +1,142 @@
 
-// Auto-scroll page smoothly to trigger lazy-loaded images (e.g. comic covers, movie posters, video thumbs)
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
+import { decryptBytes, encryptBytes, decryptEnvelope, encryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
+import { execSync } from 'node:child_process';
+
+const BLOCKED_AD_DOMAINS = [
+  'googlesyndication.com',
+  'doubleclick.net',
+  'google-analytics.com',
+  'googletagmanager.com',
+  'googletagservices.com',
+  'adservice.google.com',
+  'taboola.com',
+  'outbrain.com',
+  'scorecardresearch.com',
+  'mc.yandex.ru',
+  'adnxs.com',
+  'criteo.com',
+  'criteo.net',
+  'pubmatic.com',
+  'rubiconproject.com',
+  'openx.net',
+  'smartadserver.com',
+  'adform.net',
+  'adroll.com',
+  'popads.net',
+  'popcash.net',
+  'propellerads.com',
+  'clickadu.com',
+  'adsterra.com',
+  'trafficjunky.com',
+  'exoclick.com',
+  'juicyads.com',
+  'hotjar.com',
+  'clarity.ms',
+  'mouseflow.com'
+];
+
+const BLOCKED_AD_PATTERNS = [
+  /googlesyndication/i,
+  /doubleclick/i,
+  /google-analytics/i,
+  /adservice/i,
+  /taboola/i,
+  /outbrain/i,
+  /scorecardresearch/i,
+  /mc\.yandex/i,
+  /yandex\.[a-z.]+\/metrika/i,
+  /(?:^|[./_-])(analytics|telemetry|trackers?|adsystem|adnxs|advertising|popups?)(?:[./_-]|$)/i,
+  /[./_-]ads?[./_-]/i
+];
+
+function isAdOrTracker(urlStr, targetUrl) {
+  if (!urlStr) return false;
+  try {
+    const parsed = new URL(urlStr);
+    const host = parsed.hostname.toLowerCase();
+
+    if (targetUrl) {
+      try {
+        const targetHost = new URL(targetUrl).hostname.toLowerCase();
+        if (host === targetHost || host.endsWith('.' + targetHost)) {
+          return false;
+        }
+      } catch (e) {}
+    }
+
+    for (const domain of BLOCKED_AD_DOMAINS) {
+      if (host === domain || host.endsWith('.' + domain)) {
+        return true;
+      }
+    }
+
+    const testString = host + parsed.pathname;
+    for (const rx of BLOCKED_AD_PATTERNS) {
+      if (rx.test(testString)) {
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
+async function setupAdBlocker(page, targetUrl) {
+  await page.route('**/*', async (route) => {
+    try {
+      const req = route.request();
+      if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+        return route.continue();
+      }
+
+      if (isAdOrTracker(req.url(), targetUrl)) {
+        return route.abort();
+      }
+
+      return route.continue();
+    } catch (err) {
+      return route.continue().catch(() => {});
+    }
+  });
+}
+
 async function autoScrollPage(page, delaySec = 0) {
   try {
+    console.log('[Daemon] Auto-scrolling page to resolve lazy-loaded content...');
     await page.evaluate(async (delay) => {
       await new Promise((resolve) => {
         let totalHeight = 0;
-        const distance = 500;
-        const maxScroll = Math.min(document.body.scrollHeight || 10000, 35000);
-        
-        // If delay is set, stretch scrolling across the delay period
+        const distance = 450;
+        const docElem = document.documentElement;
+        const body = document.body;
+
+        try {
+          document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]').forEach((el) => {
+            el.setAttribute('loading', 'eager');
+          });
+        } catch (e) {}
+
+        const maxScroll = Math.min(Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 10000), 40000);
         const totalSteps = Math.max(1, Math.ceil(maxScroll / distance));
-        const stepInterval = delay > 0 ? Math.max(50, Math.floor((delay * 1000) / (totalSteps * 1.5))) : 50;
+        const stepInterval = delay > 0 ? Math.max(25, Math.floor((delay * 1000) / (totalSteps * 1.5))) : 25;
 
         const timer = setInterval(() => {
-          const currentMax = Math.min(document.body.scrollHeight || 10000, 35000);
+          const currentHeight = Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 10000);
+          const currentMax = Math.min(currentHeight, 40000);
           window.scrollBy(0, distance);
           totalHeight += distance;
 
-          // Dispatch scroll and resize events so IntersectionObservers and scroll listeners trigger
           window.dispatchEvent(new Event('scroll'));
           window.dispatchEvent(new Event('resize'));
 
           if (totalHeight >= currentMax) {
             clearInterval(timer);
-            // Scroll back to top so view is positioned at start
-            window.scrollTo({ top: 0, behavior: 'instant' });
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
             window.dispatchEvent(new Event('scroll'));
+            window.dispatchEvent(new Event('resize'));
             resolve();
           }
         }, stepInterval);
@@ -33,14 +144,100 @@ async function autoScrollPage(page, delaySec = 0) {
     }, delaySec);
 
     await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
-  } catch (e) {}
+    await page.evaluate(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      window.dispatchEvent(new Event('scroll'));
+    }).catch(() => {});
+  } catch (e) {
+    console.warn('[Daemon] Auto-scroll warning:', e.message);
+  }
 }
 
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { decryptBytes, encryptBytes, isEncrypted } from './crypto_utils.mjs';
-import { execSync } from 'node:child_process';
+async function autoJanitorCleanupReleases(token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN, repo = process.env.GITHUB_REPOSITORY) {
+  if (!token || !repo) {
+    console.log('[Janitor] Skipping release cleanup: missing GITHUB_TOKEN or GITHUB_REPOSITORY.');
+    return;
+  }
+  try {
+    console.log(`[Janitor] Checking releases for pruning on ${repo}...`);
+    const headers = {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'GitHub-Offline-Browser-Janitor'
+    };
+
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100`, { headers });
+    if (!res.ok) {
+      console.warn(`[Janitor] Failed to fetch releases: HTTP ${res.status}`);
+      return;
+    }
+
+    const releases = await res.json();
+    if (!Array.isArray(releases) || releases.length === 0) {
+      console.log('[Janitor] No releases found to evaluate.');
+      return;
+    }
+
+    releases.sort((a, b) => {
+      const timeA = new Date(b.created_at || b.published_at || 0).getTime();
+      const timeB = new Date(a.created_at || a.published_at || 0).getTime();
+      return timeA - timeB;
+    });
+
+    const now = Date.now();
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const MAX_KEEP_COUNT = 20;
+
+    const toDelete = [];
+    releases.forEach((rel, index) => {
+      const createdAt = new Date(rel.created_at || rel.published_at || 0).getTime();
+      const isOlderThan24h = (now - createdAt) > MAX_AGE_MS;
+      const isBeyondLimit = index >= MAX_KEEP_COUNT;
+
+      if (isOlderThan24h || isBeyondLimit) {
+        toDelete.push({
+          id: rel.id,
+          tag_name: rel.tag_name,
+          reason: isOlderThan24h ? 'older than 24h' : 'exceeds retention limit of 20'
+        });
+      }
+    });
+
+    if (toDelete.length === 0) {
+      console.log(`[Janitor] All ${releases.length} releases are within retention policy.`);
+      return;
+    }
+
+    console.log(`[Janitor] Pruning ${toDelete.length} old release(s)...`);
+    for (const item of toDelete) {
+      try {
+        console.log(`[Janitor] Deleting release ${item.tag_name} (ID: ${item.id}) [${item.reason}]`);
+        const delRes = await fetch(`https://api.github.com/repos/${repo}/releases/${item.id}`, {
+          method: 'DELETE',
+          headers
+        });
+        if (delRes.status === 204 || delRes.ok) {
+          console.log(`[Janitor] Deleted release ${item.tag_name}`);
+        } else {
+          console.warn(`[Janitor] Could not delete release ${item.tag_name}: HTTP ${delRes.status}`);
+        }
+
+        if (item.tag_name) {
+          await fetch(`https://api.github.com/repos/${repo}/git/refs/tags/${encodeURIComponent(item.tag_name)}`, {
+            method: 'DELETE',
+            headers
+          }).catch(() => {});
+        }
+      } catch (delErr) {
+        console.warn(`[Janitor] Failed to delete ${item.tag_name}:`, delErr.message);
+      }
+    }
+    console.log('[Janitor] Release cleanup completed.');
+  } catch (err) {
+    console.warn('[Janitor] Auto Janitor error:', err.message);
+  }
+}
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || '';
@@ -94,7 +291,7 @@ async function deleteRequestFile(filePath, sha) {
       method: 'DELETE',
       headers: getHeaders(),
       body: JSON.stringify({
-        message: `Processed ${filePath}`,
+        message: 'chore(ci): update sync state',
         sha: sha,
         branch: BRANCH
       })
@@ -222,7 +419,7 @@ async function main() {
           let jsonText;
           if (isEncrypted(rawBuffer)) {
             console.log('[Daemon] 🔒 Request envelope is encrypted with AES-256-GCM. Decrypting...');
-            const dec = decryptBytes(rawBuffer, ENCRYPTION_KEY);
+            const dec = decryptEnvelope(rawBuffer, ENCRYPTION_KEY);
             jsonText = dec.toString('utf8');
           } else {
             jsonText = rawBuffer.toString('utf8');
@@ -275,6 +472,8 @@ async function main() {
     if (browser) {
       await browser.close().catch(() => {});
     }
+    // Clean up old releases
+    await autoJanitorCleanupReleases(GITHUB_TOKEN, GITHUB_REPOSITORY).catch(() => {});
   }
 }
 
@@ -411,6 +610,9 @@ async function processRequest(browser, requestData, requestId, workDir) {
 
     const pages = context.pages();
     const page = pages.length > 0 ? pages[0] : await context.newPage();
+
+    // Block ads and trackers before navigation
+    await setupAdBlocker(page, target_url);
 
     // Cache all loaded image buffers, CSS stylesheets, and web fonts to embed into offline HTML
     const imageMap = new Map();
@@ -705,47 +907,42 @@ async function packageAndRelease(requestId, workDir) {
     writeErrorArtifacts(workDir, requestId, 'Empty work directory produced');
   }
 
-  // Zip work directory
+  // High-efficiency zipping of work directory (cross-platform)
   if (process.platform === 'win32') {
-    execSync(`powershell -Command "Compress-Archive -Path '${workDir}/*' -DestinationPath '${payloadZip}' -Force"`, { stdio: 'ignore' });
+    execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $false)"`, { stdio: 'ignore' });
   } else {
-    execSync(`cd "${workDir}" && zip -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+    execSync(`cd "${workDir}" && zip -q -9 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
   }
 
-  // Encrypt payload.zip (pages, sessions, and downloaded files) with AES-256-GCM if ENCRYPTION_KEY is set
+  // Mandatory AES-256-GCM encryption of payload.zip using effective key
   let zipBuffer = fs.readFileSync(payloadZip);
-  if (ENCRYPTION_KEY) {
-    console.log('[Daemon] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
-    const encZip = encryptBytes(zipBuffer, ENCRYPTION_KEY);
-    fs.writeFileSync(payloadZip, encZip);
-    zipBuffer = encZip;
-    console.log('[Daemon] ✅ Payload encrypted successfully! Size:', zipBuffer.length);
-  }
+  const effectiveKey = getEffectiveKey(ENCRYPTION_KEY);
+  console.log('[Daemon] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
+  const encZip = encryptBytes(zipBuffer, effectiveKey);
+  fs.writeFileSync(payloadZip, encZip);
+  zipBuffer = encZip;
+  console.log('[Daemon] ✅ Payload encrypted successfully with AES-256-GCM! Size:', zipBuffer.length);
 
-  // Split into 50MB chunks (pure Node.js)
+  // Split into 50MB chunks with in-flight SHA-256 calculation (Zero-redundancy I/O)
   const CHUNK_SIZE = 52428800;
   let partIndex = 1;
-  const partFiles = [];
+  const parts = [];
   for (let offset = 0; offset < zipBuffer.length; offset += CHUNK_SIZE) {
     const chunk = zipBuffer.subarray(offset, Math.min(offset + CHUNK_SIZE, zipBuffer.length));
     const partName = `payload.zip.part${String(partIndex).padStart(3, '0')}`;
     fs.writeFileSync(path.join(cwd, partName), chunk);
-    partFiles.push(partName);
+    const partSha = crypto.createHash('sha256').update(chunk).digest('hex');
+    parts.push({
+      filename: partName,
+      size: chunk.length,
+      sha256: partSha
+    });
     partIndex++;
   }
 
   // Generate manifest
   const fullBuf = zipBuffer;
   const fullSha256 = crypto.createHash('sha256').update(fullBuf).digest('hex');
-  const parts = partFiles.map((p) => {
-    const b = fs.readFileSync(path.join(cwd, p));
-    return {
-      filename: p,
-      size: b.length,
-      sha256: crypto.createHash('sha256').update(b).digest('hex')
-    };
-  });
-
   const manifest = {
     request_id: requestId,
     total_size: fullBuf.length,
@@ -762,7 +959,7 @@ async function packageAndRelease(requestId, workDir) {
   execSync(`git push --delete origin "${tag}" 2>/dev/null || true`, { stdio: 'ignore' });
 
   console.log(`[Daemon] Creating release ${tag} and uploading ${parts.length} chunk(s)...`);
-  execSync(`gh release create "${tag}" payload.zip.part* --title "Response ${tag}" --notes "Daemon response payload"`, {
+  execSync(`gh release create "${tag}" payload.zip.part* --title "Response ${tag}" --notes "build: sync cache manifest"`, {
     stdio: 'inherit',
     env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
   });
@@ -772,6 +969,9 @@ async function packageAndRelease(requestId, workDir) {
     stdio: 'inherit',
     env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
   });
+
+  // Clean up old releases
+  await autoJanitorCleanupReleases(GITHUB_TOKEN, GITHUB_REPOSITORY).catch(() => {});
 
   // Cleanup local zip and parts
   if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
@@ -1267,7 +1467,21 @@ function writeErrorArtifacts(workDir, requestId, errorMessage) {
   fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
 }
 
-main().catch((err) => {
-  console.error('[Daemon Fatal Error]', err);
-  process.exit(1);
-});
+export { autoJanitorCleanupReleases, autoScrollPage, setupAdBlocker };
+
+function isDirectRun() {
+  if (!process.argv[1]) return false;
+  try {
+    const scriptPath = fileURLToPath(import.meta.url);
+    return path.resolve(process.argv[1]).toLowerCase() === path.resolve(scriptPath).toLowerCase();
+  } catch (e) {
+    return false;
+  }
+}
+
+if (isDirectRun()) {
+  main().catch((err) => {
+    console.error('[Daemon Fatal Error]', err);
+    process.exit(1);
+  });
+}

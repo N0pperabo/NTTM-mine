@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { encryptBytes } from './crypto_utils.mjs';
+import { encryptBytes, getEffectiveKey } from './crypto_utils.mjs';
 
 const requestId = process.argv[2] || process.env.REQUEST_ID || 'req';
 const encryptionKey = process.env.ENCRYPTION_KEY || '';
@@ -22,49 +22,42 @@ fs.readdirSync(cwd).filter(f => f.startsWith('payload.zip.part')).forEach(f => f
 const manifestPath = path.join(cwd, 'manifest.json');
 if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
 
-// 2. Zip work/ directory (cross-platform)
-console.log('[Packer] Archiving work/ directory...');
+// 2. High-efficiency zipping of work/ directory (cross-platform)
+console.log('[Packer] Archiving work/ directory with high compression...');
 if (process.platform === 'win32') {
-  execSync(`powershell -Command "Compress-Archive -Path '${workDir}/*' -DestinationPath '${payloadZip}' -Force"`, { stdio: 'ignore' });
+  execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $false)"`, { stdio: 'ignore' });
 } else {
-  execSync(`cd "${workDir}" && zip -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+  execSync(`cd "${workDir}" && zip -q -9 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
 }
 
-// 3. Encrypt payload.zip if ENCRYPTION_KEY is provided
+// 3. Mandatory AES-256-GCM encryption of payload.zip using effective key
 let zipBuffer = fs.readFileSync(payloadZip);
-if (encryptionKey && encryptionKey.trim()) {
-  console.log('[Packer] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
-  const encryptedZip = encryptBytes(zipBuffer, encryptionKey.trim());
-  fs.writeFileSync(payloadZip, encryptedZip);
-  zipBuffer = encryptedZip;
-  console.log('[Packer] ✅ Archive encrypted successfully! Ciphertext size:', zipBuffer.length);
-} else {
-  console.log('[Packer] ENCRYPTION_KEY not set. Archive left unencrypted.');
-}
+const effectiveKey = getEffectiveKey(encryptionKey);
+console.log('[Packer] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
+const encryptedZip = encryptBytes(zipBuffer, effectiveKey);
+fs.writeFileSync(payloadZip, encryptedZip);
+zipBuffer = encryptedZip;
+console.log('[Packer] ✅ Archive encrypted successfully with AES-256-GCM! Ciphertext size:', zipBuffer.length);
 
-// 4. Split into 50MB chunks using pure Node.js (no external split utility needed)
+// 4. Split into 50MB chunks with in-flight SHA-256 calculation (Zero-redundancy I/O)
 console.log('[Packer] Splitting archive into 50MB chunks...');
 let partIndex = 1;
-const partFiles = [];
+const parts = [];
 for (let offset = 0; offset < zipBuffer.length; offset += CHUNK_SIZE) {
   const chunk = zipBuffer.subarray(offset, Math.min(offset + CHUNK_SIZE, zipBuffer.length));
   const partName = `payload.zip.part${String(partIndex).padStart(3, '0')}`;
   fs.writeFileSync(path.join(cwd, partName), chunk);
-  partFiles.push(partName);
+  const partSha = crypto.createHash('sha256').update(chunk).digest('hex');
+  parts.push({
+    filename: partName,
+    size: chunk.length,
+    sha256: partSha
+  });
   partIndex++;
 }
 
 // 5. Generate manifest.json
 const fullSha256 = crypto.createHash('sha256').update(zipBuffer).digest('hex');
-const parts = partFiles.map(partName => {
-  const buf = fs.readFileSync(path.join(cwd, partName));
-  return {
-    filename: partName,
-    size: buf.length,
-    sha256: crypto.createHash('sha256').update(buf).digest('hex')
-  };
-});
-
 const manifest = {
   request_id: requestId,
   total_size: zipBuffer.length,
@@ -73,4 +66,4 @@ const manifest = {
 };
 
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
-console.log(`[Packer] Manifest generated with ${parts.length} part(s). Complete.`);
+console.log(`[Packer] build: sync cache manifest - Manifest generated with ${parts.length} part(s). Complete.`);
