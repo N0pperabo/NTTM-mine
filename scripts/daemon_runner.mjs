@@ -510,6 +510,40 @@ async function processRequest(browser, requestData, requestId, workDir) {
               await page.mouse.click(act.x, act.y);
               await page.keyboard.type(act.value || '');
             }
+          } else if (act.type === 'shorts_next') {
+            let advancedShort = false;
+            const nextBtnSelectors = [
+              '#navigation-button-down button',
+              'ytd-shorts #navigation-button-down button',
+              'button[aria-label*="Next"]',
+              'button[aria-label*="بعدی"]',
+              '#shorts-container #navigation-button-down',
+              'ytd-reel-video-renderer[is-active] + ytd-reel-video-renderer'
+            ];
+            for (const sel of nextBtnSelectors) {
+              try {
+                const btn = page.locator(sel).first();
+                if ((await btn.count()) > 0 && (await btn.isVisible())) {
+                  await btn.click({ timeout: 3500 });
+                  advancedShort = true;
+                  break;
+                }
+              } catch(e) {}
+            }
+            if (!advancedShort) {
+              try {
+                const container = page.locator('#shorts-container, ytd-shorts, body').first();
+                await container.hover().catch(() => {});
+                await page.mouse.wheel(0, 950);
+                await page.keyboard.press('ArrowDown');
+                await page.keyboard.press('PageDown');
+              } catch(e) {}
+            }
+            const oldShortUrl = page.url();
+            await page.waitForTimeout(2000);
+            await page.waitForFunction((old) => window.location.href !== old, oldShortUrl, { timeout: 6000 }).catch(() => {});
+            await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+            await page.waitForTimeout(1000);
           } else if (act.type === 'click') {
             if (el) await el.click({ timeout: 5000 });
             else if (act.href) await page.goto(act.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});

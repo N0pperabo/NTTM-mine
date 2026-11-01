@@ -369,6 +369,45 @@ async function main() {
               }
               break;
 
+            case 'shorts_next':
+              console.log('[Runner] Navigating to next YouTube Short...');
+              let advancedShort = false;
+              const nextBtnSelectors = [
+                '#navigation-button-down button',
+                'ytd-shorts #navigation-button-down button',
+                'button[aria-label*="Next"]',
+                'button[aria-label*="بعدی"]',
+                '#shorts-container #navigation-button-down',
+                'ytd-reel-video-renderer[is-active] + ytd-reel-video-renderer'
+              ];
+              for (const sel of nextBtnSelectors) {
+                try {
+                  const btn = page.locator(sel).first();
+                  if ((await btn.count()) > 0 && (await btn.isVisible())) {
+                    await btn.click({ timeout: 3500 });
+                    advancedShort = true;
+                    console.log(`[Runner] Clicked Shorts next button via: ${sel}`);
+                    break;
+                  }
+                } catch(e) {}
+              }
+              if (!advancedShort) {
+                try {
+                  const container = page.locator('#shorts-container, ytd-shorts, body').first();
+                  await container.hover().catch(() => {});
+                  await page.mouse.wheel(0, 950);
+                  await page.keyboard.press('ArrowDown');
+                  await page.keyboard.press('PageDown');
+                  console.log('[Runner] Scrolled mouse wheel & pressed ArrowDown on Shorts container');
+                } catch(e) {}
+              }
+              const oldShortUrl = page.url();
+              await page.waitForTimeout(2000);
+              await page.waitForFunction((old) => window.location.href !== old, oldShortUrl, { timeout: 6000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+              await page.waitForTimeout(1000);
+              break;
+
             case 'click':
               if (el) {
                 await el.click({ timeout: 5000 });

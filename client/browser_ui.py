@@ -266,7 +266,7 @@ class OfflineBrowserUI:
         self.current_delay_seconds = 0
         return max(0, delay)
 
-    def dispatch_navigate(self, target_url: str, custom_delay_seconds: int = 0):
+    def dispatch_navigate(self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = ""):
         """Handles URL bar or link navigation."""
         if self.is_busy:
             self._notify_ui("سیستم در حال حاضر مشغول پردازش درخواست قبلی است.")
@@ -288,14 +288,14 @@ class OfflineBrowserUI:
                 custom_delay_seconds=delay,
                 status_callback=on_status,
             )
-            self._handle_fetch_result(res, target_url)
+            self._handle_fetch_result(res, target_url, tab_id=tab_id)
             self.is_busy = False
             self._set_loading(False)
 
         threading.Thread(target=task, daemon=True).start()
 
     def dispatch_form_submit(
-        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
+        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0, tab_id: str = ""
     ):
         """Handles form submission."""
         if self.is_busy:
@@ -320,7 +320,7 @@ class OfflineBrowserUI:
                 custom_delay_seconds=delay,
                 status_callback=self._update_status,
             )
-            self._handle_fetch_result(res, action_url)
+            self._handle_fetch_result(res, action_url, tab_id=tab_id)
             self.is_busy = False
             self._set_loading(False)
 
@@ -332,6 +332,7 @@ class OfflineBrowserUI:
         actions: List[Dict[str, Any]],
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_delay_seconds: int = 0,
+        tab_id: str = "",
     ):
         """Handles single or batch replay execution."""
         if self.is_busy:
@@ -357,13 +358,13 @@ class OfflineBrowserUI:
                 custom_delay_seconds=delay,
                 status_callback=self._update_status,
             )
-            self._handle_fetch_result(res, target_url or self.current_url)
+            self._handle_fetch_result(res, target_url or self.current_url, tab_id=tab_id)
             self.is_busy = False
             self._set_loading(False)
 
         threading.Thread(target=task, daemon=True).start()
 
-    def _handle_fetch_result(self, result: FetchResult, requested_url: str):
+    def _handle_fetch_result(self, result: FetchResult, requested_url: str, tab_id: str = ""):
         if not result.success:
             self._notify_ui(f"خطا: {result.error_message}", is_error=True)
             return
@@ -390,9 +391,9 @@ class OfflineBrowserUI:
             self.history.append({"url": final_url, "local_url": local_frame_url, "title": title})
             self.history_index = len(self.history) - 1
 
-            # Tell shell to load iframe and update address bar
+            # Tell shell to load iframe and update address bar (supporting multi-tab)
             self._call_js(
-                f"window.shellApp.onPageLoaded('{local_frame_url}', '{final_url}', {json.dumps(title)})"
+                f"window.shellApp.onPageLoaded('{local_frame_url}', '{final_url}', {json.dumps(title)}, '{tab_id}')"
             )
 
     # ---------------- Helper UI Communicators ----------------
@@ -774,6 +775,122 @@ class OfflineBrowserUI:
       white-space: nowrap;
     }
 
+    /* Multi-Tab Bar */
+    .tabs-bar {
+      height: 38px;
+      background: #000000;
+      border-bottom: 1px solid #1c1c1c;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      user-select: none;
+      gap: 6px;
+      z-index: 95;
+    }
+    .tabs-list {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs-list::-webkit-scrollbar { display: none; }
+    .tab-item {
+      height: 29px;
+      min-width: 140px;
+      max-width: 220px;
+      background: #0d0d0d;
+      border: 1px solid #242424;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .tab-item:hover {
+      background: #141414;
+      border-color: #383838;
+    }
+    .tab-item.active {
+      background: #1c1c1c;
+      border-color: #ffffff;
+    }
+    .tab-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #737373;
+    }
+    .tab-item.active .tab-icon { color: #ffffff; }
+    .tab-title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 500;
+      color: #a3a3a3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      direction: ltr;
+      text-align: right;
+    }
+    .tab-item.active .tab-title {
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .tab-spinner {
+      width: 11px;
+      height: 11px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+    .tab-close {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: #737373;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+    .tab-close:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .btn-new-tab {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #0d0d0d;
+      border: 1px solid #242424;
+      color: #a3a3a3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-new-tab:hover {
+      background: #181818;
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+
     /* Content Area */
     .content-area {
       flex: 1;
@@ -926,6 +1043,14 @@ class OfflineBrowserUI:
 </head>
 <body>
 
+  <!-- Top Tabs Bar -->
+  <div class="tabs-bar">
+    <div class="tabs-list" id="tabs-list"></div>
+    <button class="btn-new-tab" onclick="window.shellApp.createNewTab()" title="تب جدید (Ctrl+T)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  </div>
+
   <!-- Top Toolbar -->
   <div class="toolbar">
     <!-- Home Button -->
@@ -1003,7 +1128,7 @@ class OfflineBrowserUI:
 
   <!-- Main Web Content -->
   <div class="content-area">
-    <iframe id="browser-frame" src="/start" sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>
+    <div id="frames-container" style="width:100%; height:100%; position:relative;"></div>
     <div class="loading-overlay" id="loading-overlay">
       <div class="spinner-ring"></div>
       <div class="loading-text" id="loading-text">در حال پردازش درخواست در گیت‌هاب...</div>
@@ -1089,6 +1214,9 @@ class OfflineBrowserUI:
       isCustomDelayActive: false,
       currentLiveUrl: '',
       queue: [],
+      tabs: [],
+      activeTabId: null,
+      tabCounter: 0,
 
       init: function() {
         const urlInput = document.getElementById('url-input');
@@ -1096,52 +1224,212 @@ class OfflineBrowserUI:
           if (e.key === 'Enter') this.navigateFromBar();
         });
 
-        const frame = document.getElementById('browser-frame');
-        frame.addEventListener('load', () => {
-          this.hideLoading();
-          try {
-            const loc = frame.contentWindow.location.href;
-            if (loc && !loc.includes('/start')) {
-              urlInput.value = this.currentLiveUrl || loc;
-              this.updateShortsButton(this.currentLiveUrl || loc);
-            }
-          } catch(err) {}
-          this.injectDeepInterceptor();
+        // Global Keyboard shortcuts
+        window.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') {
+            e.preventDefault();
+            this.createNewTab();
+          } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {
+            e.preventDefault();
+            this.closeTab(this.activeTabId);
+          }
         });
 
-        setTimeout(() => this.injectDeepInterceptor(), 500);
-
-        setInterval(() => {
-          if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.get_current_url().then(res => {
-              if (res && res.url && res.url !== 'about:blank') {
-                if (!document.activeElement || document.activeElement.id !== 'url-input') {
-                  if (!res.url.includes('/start')) {
-                    urlInput.value = res.url;
-                  }
-                }
-                this.updateShortsButton(res.url);
-              }
-            }).catch(()=>{});
-          }
-        }, 1500);
+        // Start with Tab 1
+        this.createNewTab('', false);
       },
 
-      onPageLoaded: function(localUrl, targetUrl, title) {
-        this.hideLoading();
-        this.currentLiveUrl = targetUrl || '';
-        const urlInput = document.getElementById('url-input');
-        if (targetUrl && urlInput) {
-          urlInput.value = targetUrl;
+      createNewTab: function(url = '', autoNavigate = false) {
+        this.tabCounter++;
+        const tabId = 'tab_' + this.tabCounter + '_' + Math.random().toString(36).substr(2, 5);
+        const tab = {
+          id: tabId,
+          title: 'صفحه اصلی NTTM',
+          url: url || '',
+          frameSrc: url ? '' : '/start',
+          history: [],
+          historyIndex: -1,
+          isLoading: false
+        };
+        this.tabs.push(tab);
+
+        // Create dedicated iframe for this tab
+        const container = document.getElementById('frames-container');
+        const frame = document.createElement('iframe');
+        frame.id = 'frame-' + tabId;
+        frame.className = 'tab-frame';
+        frame.style.width = '100%';
+        frame.style.height = '100%';
+        frame.style.border = 'none';
+        frame.style.display = 'none';
+        frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups');
+        frame.src = tab.frameSrc;
+
+        frame.addEventListener('load', () => {
+          const curTab = this.getTab(tabId);
+          if (curTab) {
+            curTab.isLoading = false;
+            try {
+              const loc = frame.contentWindow.location.href;
+              if (loc && !loc.includes('/start')) {
+                curTab.url = curTab.url || loc;
+              }
+            } catch(e) {}
+          }
+          if (this.activeTabId === tabId) {
+            this.hideLoading();
+            this.syncActiveTabUI();
+          }
+          this.renderTabs();
+          this.injectDeepInterceptor(frame);
+        });
+
+        container.appendChild(frame);
+        this.renderTabs();
+        this.switchTab(tabId);
+
+        if (url && autoNavigate) {
+          this.navigate(url, undefined, tabId);
         }
-        const frame = document.getElementById('browser-frame');
+        return tabId;
+      },
+
+      closeTab: function(tabId, e) {
+        if (e) e.stopPropagation();
+        if (this.tabs.length <= 1) {
+          // Reset the only tab to start home
+          const tab = this.tabs[0];
+          tab.title = 'صفحه اصلی NTTM';
+          tab.url = '';
+          tab.frameSrc = '/start';
+          const frame = document.getElementById('frame-' + tab.id);
+          if (frame) frame.src = '/start';
+          this.syncActiveTabUI();
+          this.renderTabs();
+          return;
+        }
+
+        const idx = this.tabs.findIndex(t => t.id === tabId);
+        if (idx === -1) return;
+
+        const frame = document.getElementById('frame-' + tabId);
+        if (frame && frame.parentNode) {
+          frame.parentNode.removeChild(frame);
+        }
+
+        this.tabs.splice(idx, 1);
+
+        if (this.activeTabId === tabId) {
+          const nextTab = this.tabs[Math.max(0, idx - 1)];
+          this.switchTab(nextTab.id);
+        } else {
+          this.renderTabs();
+        }
+      },
+
+      switchTab: function(tabId) {
+        const tab = this.getTab(tabId);
+        if (!tab) return;
+        this.activeTabId = tabId;
+
+        document.querySelectorAll('.tab-frame').forEach(f => {
+          f.style.display = (f.id === 'frame-' + tabId) ? 'block' : 'none';
+        });
+
+        this.syncActiveTabUI();
+        this.renderTabs();
+      },
+
+      getTab: function(id) {
+        return this.tabs.find(t => t.id === id);
+      },
+
+      getActiveTab: function() {
+        return this.getTab(this.activeTabId) || this.tabs[0] || null;
+      },
+
+      renderTabs: function() {
+        const container = document.getElementById('tabs-list');
+        if (!container) return;
+        container.innerHTML = '';
+
+        this.tabs.forEach((tab) => {
+          const isActive = tab.id === this.activeTabId;
+          const el = document.createElement('div');
+          el.className = 'tab-item' + (isActive ? ' active' : '');
+          el.onclick = () => this.switchTab(tab.id);
+
+          const iconHtml = tab.isLoading
+            ? '<div class="tab-spinner"></div>'
+            : '<div class="tab-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>';
+
+          const titleText = tab.title || (tab.url ? tab.url.replace(/^https?:\/\//, '') : 'تب جدید');
+
+          el.innerHTML = `
+            ${iconHtml}
+            <span class="tab-title" title="${tab.url || tab.title}">${titleText}</span>
+            <button class="tab-close" onclick="window.shellApp.closeTab('${tab.id}', event)" title="بستن تب (Ctrl+W)">&times;</button>
+          `;
+          container.appendChild(el);
+        });
+      },
+
+      syncActiveTabUI: function() {
+        const tab = this.getActiveTab();
+        if (!tab) return;
+
+        this.currentLiveUrl = tab.url || '';
+        const urlInput = document.getElementById('url-input');
+        if (urlInput) {
+          urlInput.value = tab.url || '';
+        }
+        document.title = (tab.title ? tab.title + ' • ' : '') + 'N0PPERABO NTTM';
+        this.updateShortsButton(tab.url || '');
+        if (tab.isLoading) {
+          this.showLoading();
+        } else {
+          this.hideLoading();
+        }
+      },
+
+      onPageLoaded: function(localUrl, targetUrl, title, tabId) {
+        let tab = tabId ? this.getTab(tabId) : this.getActiveTab();
+        if (!tab) tab = this.getActiveTab();
+        if (!tab) return;
+
+        tab.isLoading = false;
+        tab.currentLiveUrl = targetUrl || '';
+        tab.url = targetUrl || '';
+        tab.title = title || targetUrl || 'صفحه آفلاین';
+        tab.frameSrc = localUrl;
+
+        // History recording
+        if (tab.historyIndex < tab.history.length - 1) {
+          tab.history = tab.history.slice(0, tab.historyIndex + 1);
+        }
+        tab.history.push({ url: targetUrl, local_url: localUrl, title: tab.title });
+        tab.historyIndex = tab.history.length - 1;
+
+        const frame = document.getElementById('frame-' + tab.id);
         if (frame) {
           frame.src = localUrl;
         }
-        if (title) {
-          document.title = title + ' - N0PPERABO NTTM';
+
+        if (tab.id === this.activeTabId) {
+          this.hideLoading();
+          this.syncActiveTabUI();
         }
-        this.updateShortsButton(targetUrl);
+        this.renderTabs();
+      },
+
+      onFileDownloaded: function(filename, tabId) {
+        let tab = tabId ? this.getTab(tabId) : this.getActiveTab();
+        if (tab) tab.isLoading = false;
+        if (!tab || tab.id === this.activeTabId) {
+          this.hideLoading();
+        }
+        this.renderTabs();
+        this.showToast('فایل با موفقیت دانلود و ذخیره شد: ' + filename, false, true);
       },
 
       setLoading: function(isLoading, msg) {
@@ -1157,69 +1445,135 @@ class OfflineBrowserUI:
         if (el) el.innerHTML = '<span>' + msg + '</span>';
       },
 
-      showToast: function(msg, isError, isFile) {
-        this.updateStatus(msg);
-      },
-
-      showLoading: function(text) {
-        document.getElementById('loading-text').textContent = text || 'در حال ارسال اکشن به گیت‌هاب...';
-        document.getElementById('loading-overlay').classList.add('active');
-        document.getElementById('status-text').innerHTML = '<span>' + (text || 'در حال پردازش...') + '</span>';
+      showLoading: function(msg) {
+        const overlay = document.getElementById('loading-overlay');
+        const text = document.getElementById('loading-text');
+        if (msg) text.textContent = msg;
+        overlay.classList.add('active');
       },
 
       hideLoading: function() {
         document.getElementById('loading-overlay').classList.remove('active');
-        document.getElementById('status-text').innerHTML = '<span>آماده</span>';
+        this.setStatus('آماده', 'ready');
+      },
+
+      setStatus: function(text, state) {
+        const el = document.getElementById('status-text');
+        if (el) {
+          el.innerHTML = '<span class="status-' + (state || 'ready') + '">' + text + '</span>';
+        }
+      },
+
+      showToast: function(msg, isError, isFile) {
+        const existing = document.querySelector('.toast-notify');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'toast-notify' + (isError ? ' error' : '');
+        toast.innerHTML = '<span>' + msg + '</span>';
+
+        if (isFile) {
+          const btn = document.createElement('button');
+          btn.textContent = 'باز کردن پوشه دانلود';
+          btn.onclick = () => {
+            if (window.pywebview && window.pywebview.api) {
+              window.pywebview.api.open_downloads_folder();
+            }
+          };
+          toast.appendChild(btn);
+        }
+
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4500);
+      },
+
+      navigate: function(url, customDelay, tabId) {
+        if (!url) return;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = 'https://' + url;
+        }
+        let tab = tabId ? this.getTab(tabId) : this.getActiveTab();
+        if (!tab) tab = this.getActiveTab();
+        if (!tab) return;
+
+        const delay = customDelay !== undefined ? customDelay : (this.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0);
+        tab.url = url;
+        tab.isLoading = true;
+        tab.title = url.replace(/^https?:\/\//, '');
+
+        if (tab.id === this.activeTabId) {
+          document.getElementById('url-input').value = url;
+          this.showLoading('در حال ارسال درخواست به گیت‌هاب...');
+          this.setStatus('در حال ارسال درخواست به گیت‌هاب...', 'loading');
+        }
+        this.renderTabs();
+
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.navigate(url, delay, tab.id);
+        }
       },
 
       navigateFromBar: function() {
-        let val = document.getElementById('url-input').value.trim();
+        const urlInput = document.getElementById('url-input');
+        const val = urlInput.value.trim();
         if (!val) return;
-        if (!val.startsWith('http://') && !val.startsWith('https://')) {
-          if (val.includes('.') && !val.includes(' ')) {
-            val = 'https://' + val;
-          } else {
-            val = 'https://www.google.com/search?q=' + encodeURIComponent(val);
-          }
+        if (val.startsWith('http://') || val.startsWith('https://')) {
+          this.navigate(val);
+        } else if (val.includes('.') && !val.includes(' ')) {
+          this.navigate('https://' + val);
+        } else {
+          this.navigate('https://www.google.com/search?q=' + encodeURIComponent(val));
         }
-        this.navigate(val);
       },
 
-      navigate: function(url) {
-        const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
-        this.showLoading('در حال بارگذاری صفحه از طریق رانر گیت‌هاب...');
-        this.updateShortsButton(url);
-        if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.navigate(url, delay);
+      goBack: function() {
+        const tab = this.getActiveTab();
+        if (!tab || tab.historyIndex <= 0) return;
+        tab.historyIndex--;
+        const item = tab.history[tab.historyIndex];
+        tab.url = item.url;
+        tab.title = item.title;
+        tab.frameSrc = item.local_url;
+        const frame = document.getElementById('frame-' + tab.id);
+        if (frame) frame.src = item.local_url;
+        this.syncActiveTabUI();
+        this.renderTabs();
+      },
+
+      goForward: function() {
+        const tab = this.getActiveTab();
+        if (!tab || tab.historyIndex >= tab.history.length - 1) return;
+        tab.historyIndex++;
+        const item = tab.history[tab.historyIndex];
+        tab.url = item.url;
+        tab.title = item.title;
+        tab.frameSrc = item.local_url;
+        const frame = document.getElementById('frame-' + tab.id);
+        if (frame) frame.src = item.local_url;
+        this.syncActiveTabUI();
+        this.renderTabs();
+      },
+
+      reload: function() {
+        const tab = this.getActiveTab();
+        if (!tab) return;
+        if (tab.url && !tab.url.includes('/start')) {
+          this.navigate(tab.url, undefined, tab.id);
         } else {
-          document.getElementById('browser-frame').src = url;
+          this.goHome();
         }
       },
 
       goHome: function() {
-        document.getElementById('browser-frame').src = '/start';
-        document.getElementById('url-input').value = '';
-        this.currentLiveUrl = '';
-        this.updateShortsButton('');
-      },
-
-      goBack: function() {
-        if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.go_back();
-        }
-      },
-
-      goForward: function() {
-        if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.go_forward();
-        }
-      },
-
-      reload: function() {
-        if (window.pywebview && window.pywebview.api) {
-          this.showLoading('در حال بازخوانی صفحه...');
-          window.pywebview.api.reload();
-        }
+        const tab = this.getActiveTab();
+        if (!tab) return;
+        tab.url = '';
+        tab.title = 'صفحه اصلی NTTM';
+        tab.frameSrc = '/start';
+        const frame = document.getElementById('frame-' + tab.id);
+        if (frame) frame.src = '/start';
+        this.syncActiveTabUI();
+        this.renderTabs();
       },
 
       updateShortsButton: function(url) {
@@ -1234,9 +1588,13 @@ class OfflineBrowserUI:
       },
 
       triggerShortsNext: function() {
-        this.showLoading('در حال دریافت شورتز بعدی...');
+        const tab = this.getActiveTab();
+        if (!tab) return;
+        tab.isLoading = true;
+        this.showLoading('در حال دریافت و اسکرول به شورتز بعدی...');
+        this.renderTabs();
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.navigate_shorts_next('');
+          window.pywebview.api.navigate_shorts_next('', tab.id);
         }
       },
 
@@ -1253,7 +1611,7 @@ class OfflineBrowserUI:
           sendBtn.style.display = 'flex';
           qBar.classList.add('active');
           this.showToast('مد دسته‌ای فعال شد: کلیک‌ها و تایپ‌ها در صف ضبط می‌شوند.');
-          this.injectDeepInterceptor();
+          document.querySelectorAll('.tab-frame').forEach(f => this.injectDeepInterceptor(f));
         } else {
           toggle.classList.remove('batch');
           text.textContent = 'مد مستقیم';
@@ -1309,7 +1667,6 @@ class OfflineBrowserUI:
       },
 
       queueAction: function(action) {
-        // Smart debouncing: if typing in the same input, update value instead of adding duplicate items
         if (action.type === 'fill') {
           const last = this.queue[this.queue.length - 1];
           if (last && last.type === 'fill' && last.selector === action.selector) {
@@ -1384,7 +1741,8 @@ class OfflineBrowserUI:
           this.showToast('صف اقدامات خالی است. ابتدا روی صفحه کلیک یا تایپ کنید.', true);
           return;
         }
-        const targetUrl = this.currentLiveUrl || document.getElementById('url-input').value;
+        const tab = this.getActiveTab();
+        const targetUrl = (tab && tab.url) || this.currentLiveUrl || document.getElementById('url-input').value;
         if (!targetUrl || targetUrl.includes('/start') || targetUrl === 'about:blank') {
           this.showToast('آدرس صفحه مشخص نیست. لطفاً ابتدا به یک صفحه وب بروید.', true);
           return;
@@ -1394,7 +1752,7 @@ class OfflineBrowserUI:
         const actionsToSend = [...this.queue];
         this.clearQueue();
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.run_batch_actions(targetUrl, actionsToSend, delay);
+          window.pywebview.api.run_batch_actions(targetUrl, actionsToSend, delay, tab ? tab.id : '');
         }
       },
 
@@ -1435,8 +1793,9 @@ class OfflineBrowserUI:
         }
       },
 
-      injectDeepInterceptor: function() {
-        const frame = document.getElementById('browser-frame');
+      injectDeepInterceptor: function(targetFrame) {
+        const frame = targetFrame || document.getElementById('frame-' + this.activeTabId);
+        if (!frame) return;
         try {
           const doc = frame.contentDocument || frame.contentWindow.document;
           const win = frame.contentWindow;
@@ -1515,7 +1874,7 @@ class OfflineBrowserUI:
                   } catch(e) {}
                 }
 
-                // 3. Unique attributes: data-testid, aria-label, placeholder, title, role
+                // 3. Unique attributes
                 const tag = el.tagName.toLowerCase();
                 for (const attr of ['data-testid', 'aria-label', 'placeholder', 'title', 'role']) {
                   const val = el.getAttribute(attr);
@@ -1580,22 +1939,30 @@ class OfflineBrowserUI:
 
               // --- 1. CLICK Interception ---
               document.addEventListener('click', function(e) {
-                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 const target = e.target.closest('a') || e.target.closest('button') || e.target.closest('input[type="submit"]') || e.target.closest('input[type="button"]') || e.target.closest('[role="button"]') || e.target;
                 if (!target) return;
 
+                const link = target.closest('a');
+                const href = link ? link.getAttribute('href') : null;
+                const fullHref = (href && !href.startsWith('javascript:') && !href.startsWith('#')) ? new URL(href, window.location.href).href : '';
+
+                // Middle-click or Ctrl+Click on link: open in new tab!
+                if (link && fullHref && (e.button === 1 || e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.parent.shellApp.createNewTab(fullHref, true);
+                  return false;
+                }
+
+                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 const tag = target.tagName.toLowerCase();
                 const isInput = tag === 'input' && !['submit', 'button', 'checkbox', 'radio'].includes(target.type);
                 const isTextarea = tag === 'textarea';
 
                 // In Batch Mode:
                 if (isBatch) {
-                  // Do not prevent click on text inputs/textareas so user can focus & type freely!
-                  if (isInput || isTextarea) {
-                    return;
-                  }
+                  if (isInput || isTextarea) return;
 
-                  // Checkboxes & Radios: let them toggle state in UI, then record check
                   if (tag === 'input' && ['checkbox', 'radio'].includes(target.type)) {
                     setTimeout(() => {
                       const info = getElementInfo(target);
@@ -1610,14 +1977,10 @@ class OfflineBrowserUI:
                     return;
                   }
 
-                  // Prevent navigation/default submit in Batch Mode and queue the action
                   e.preventDefault();
                   e.stopPropagation();
 
                   const info = getElementInfo(target);
-                  const href = target.getAttribute('href');
-                  const fullHref = href ? new URL(href, window.location.href).href : '';
-
                   flashElement(target);
 
                   window.parent.shellApp.queueAction({
@@ -1632,18 +1995,29 @@ class OfflineBrowserUI:
                   return false;
                 }
 
-                // In Direct Mode: normal link navigation
-                const href = target.getAttribute('href');
-                if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                // In Direct Mode:
+                if (link && fullHref) {
                   e.preventDefault();
                   e.stopPropagation();
-                  const absoluteUrl = new URL(href, window.location.href).href;
-                  window.parent.shellApp.navigate(absoluteUrl);
+                  window.parent.shellApp.navigate(fullHref);
                   return false;
                 }
               }, true);
 
-              // --- 2. INPUT & CHANGE Interception (Typing in fields) ---
+              // Middle click mouseup prevent default
+              document.addEventListener('auxclick', function(e) {
+                if (e.button === 1) {
+                  const link = e.target.closest('a');
+                  if (link && link.getAttribute('href')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const fullHref = new URL(link.getAttribute('href'), window.location.href).href;
+                    window.parent.shellApp.createNewTab(fullHref, true);
+                  }
+                }
+              }, true);
+
+              // --- 2. INPUT & CHANGE Interception ---
               function handleInput(e) {
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 if (!isBatch) return;
@@ -1682,8 +2056,23 @@ class OfflineBrowserUI:
               document.addEventListener('input', handleInput, true);
               document.addEventListener('change', handleInput, true);
 
-              // --- 3. KEYDOWN Interception (Enter on search/form inputs) ---
+              // --- 3. KEYDOWN Interception (Enter on forms / Shorts navigation) ---
+              let isShortsScrolling = false;
               document.addEventListener('keydown', function(e) {
+                const curUrl = (window.parent && window.parent.shellApp && window.parent.shellApp.getActiveTab && (window.parent.shellApp.getActiveTab().url || '')) || window.location.href;
+                const isShorts = curUrl.includes('/shorts');
+
+                // YouTube Shorts ArrowDown or PageDown key
+                if (isShorts && (e.key === 'ArrowDown' || e.key === 'PageDown')) {
+                  e.preventDefault();
+                  if (!isShortsScrolling) {
+                    isShortsScrolling = true;
+                    setTimeout(() => { isShortsScrolling = false; }, 3000);
+                    window.parent.shellApp.triggerShortsNext();
+                  }
+                  return false;
+                }
+
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 if (!isBatch) return;
 
@@ -1694,7 +2083,6 @@ class OfflineBrowserUI:
                     e.stopPropagation();
 
                     const info = getElementInfo(target);
-                    // Ensure final typed value is queued
                     window.parent.shellApp.queueAction({
                       type: 'fill',
                       selector: info.selector,
@@ -1705,7 +2093,6 @@ class OfflineBrowserUI:
                       y: info.y
                     });
 
-                    // Queue Enter press
                     window.parent.shellApp.queueAction({
                       type: 'press',
                       key: 'Enter',
@@ -1720,7 +2107,21 @@ class OfflineBrowserUI:
                 }
               }, true);
 
-              // --- 4. FORM SUBMIT Interception ---
+              // --- 4. YOUTUBE SHORTS WHEEL SCROLL Interception ---
+              window.addEventListener('wheel', function(e) {
+                const curUrl = (window.parent && window.parent.shellApp && window.parent.shellApp.getActiveTab && (window.parent.shellApp.getActiveTab().url || '')) || window.location.href;
+                const isShorts = curUrl.includes('/shorts');
+                if (!isShorts) return;
+
+                // When user scrolls down on Shorts
+                if (e.deltaY > 35 && !isShortsScrolling) {
+                  isShortsScrolling = true;
+                  setTimeout(() => { isShortsScrolling = false; }, 3000);
+                  window.parent.shellApp.triggerShortsNext();
+                }
+              }, { passive: true });
+
+              // --- 5. SUBMIT Interception ---
               document.addEventListener('submit', function(e) {
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 if (isBatch) {
@@ -2431,18 +2832,18 @@ class WebviewApiBridge:
     def get_delay(self) -> int:
         return self._ui.current_delay_seconds
 
-    def navigate(self, target_url: str, custom_delay_seconds: int = 0):
-        self._ui.dispatch_navigate(target_url, custom_delay_seconds)
+    def navigate(self, target_url: str, custom_delay_seconds: int = 0, tab_id: str = ""):
+        self._ui.dispatch_navigate(target_url, custom_delay_seconds, tab_id=tab_id)
 
-    def navigate_shorts_next(self, current_video_id: str = "") -> Dict[str, Any]:
-        actions = [{"type": "press", "key": "ArrowDown"}]
-        self._ui.dispatch_replay(self._ui.current_url, actions)
+    def navigate_shorts_next(self, current_video_id: str = "", tab_id: str = "") -> Dict[str, Any]:
+        actions = [{"type": "shorts_next", "wait_after_ms": 2500}]
+        self._ui.dispatch_replay(self._ui.current_url, actions, tab_id=tab_id)
         return {"status": "ok"}
 
     def submit_form(
-        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
+        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0, tab_id: str = ""
     ):
-        self._ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds)
+        self._ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds, tab_id=tab_id)
 
     def dispatch_replay(
         self,
@@ -2450,11 +2851,12 @@ class WebviewApiBridge:
         actions: List[Dict[str, Any]],
         intercepted_ajax: Optional[Dict[str, Any]] = None,
         custom_delay_seconds: int = 0,
+        tab_id: str = "",
     ):
-        self._ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds)
+        self._ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds, tab_id=tab_id)
 
-    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0):
-        self._ui.dispatch_replay(target_url, actions, None, custom_delay_seconds)
+    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0, tab_id: str = ""):
+        self._ui.dispatch_replay(target_url, actions, None, custom_delay_seconds, tab_id=tab_id)
 
     def set_batch_mode(self, enabled: bool):
         self._ui.is_batch_mode = bool(enabled)
