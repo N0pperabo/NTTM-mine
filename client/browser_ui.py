@@ -425,38 +425,24 @@ class OfflineBrowserUI:
     }
 
     /* Brand Logo & Name */
-    .brand-badge {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 4px 8px;
-      background: transparent;
-      border: 1px solid transparent;
+    .btn-home-box {
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      padding: 7px 18px;
       border-radius: 6px;
+      font-size: 13.5px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
       flex-shrink: 0;
     }
-    .brand-badge:hover {
-      background: #1a1a1a;
-      border-color: var(--border-subtle);
+    .btn-home-box:hover {
+      background: #e5e5e5;
     }
-    .brand-logo-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 38px;
-    }
-    .toolbar-logo {
-      height: 36px;
-      width: auto;
-      object-fit: contain;
-    }
-    .brand-title {
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      color: #ffffff;
+    .btn-home-box:active {
+      transform: scale(0.96);
     }
 
     /* Navigation Buttons */
@@ -854,13 +840,8 @@ class OfflineBrowserUI:
 
   <!-- Top Toolbar -->
   <div class="toolbar">
-    <!-- Brand Logo -->
-    <div class="brand-badge" onclick="window.shellApp.goHome()" title="صفحه اصلی N0PPERABO">
-      <div class="brand-logo-container">
-        <img src="/assets/logo.svg" alt="N0pperabo" class="toolbar-logo" />
-      </div>
-      <span class="brand-title">NTTM</span>
-    </div>
+    <!-- Home Button -->
+    <button class="btn-home-box" onclick="window.shellApp.goHome()" title="صفحه اصلی (Home)">Home</button>
 
     <!-- Navigation Buttons -->
     <div class="nav-group">
@@ -960,6 +941,10 @@ class OfflineBrowserUI:
       <div class="form-group">
         <label>ریپازیتوری هدف (Target Repository):</label>
         <input type="text" id="cfg-repo" placeholder="owner/repo-name" />
+      </div>
+      <div class="form-group">
+        <label>کلید رمزگذاری سرتاسری (Encryption Key - اختیاری):</label>
+        <input type="password" id="cfg-enc" placeholder="کلید رمزگذاری امنیتی پکت‌ها (اختیاری)" />
       </div>
       <div class="modal-actions">
         <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">انصراف</button>
@@ -1231,8 +1216,9 @@ class OfflineBrowserUI:
       openSettings: function() {
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.get_config().then(cfg => {
-            document.getElementById('cfg-token').value = cfg.token || '';
-            document.getElementById('cfg-repo').value = cfg.repo || '';
+            document.getElementById('cfg-token').value = cfg.token || cfg.github_token || '';
+            document.getElementById('cfg-repo').value = cfg.repo || cfg.github_repo || '';
+            document.getElementById('cfg-enc').value = cfg.encryption_key || '';
             document.getElementById('settings-modal').classList.add('active');
           });
         } else {
@@ -1247,17 +1233,18 @@ class OfflineBrowserUI:
       saveSettings: function() {
         const token = document.getElementById('cfg-token').value.trim();
         const repo = document.getElementById('cfg-repo').value.trim();
+        const encKey = document.getElementById('cfg-enc').value.trim();
         if (!token || !repo) {
           alert('لطفاً هر دو فیلد توکن و ریپازیتوری را پر کنید.');
           return;
         }
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.save_config(token, repo).then(res => {
-            if (res.success) {
+          window.pywebview.api.save_config(token, repo, "main", "", encKey).then(res => {
+            if (res && res.success) {
               alert('تنظیمات با موفقیت ذخیره شد.');
               this.closeSettings();
             } else {
-              alert('خطا در ذخیره: ' + res.error);
+              alert('خطا در ذخیره: ' + ((res && res.error) || 'خطای نامشخص'));
             }
           });
         }
@@ -1593,7 +1580,7 @@ class OfflineBrowserUI:
       <div class="hero-logo-box">
         <img src="/assets/logo.svg" alt="N0pperabo Logo" class="hero-logo" />
       </div>
-      <h1>N0PPERABO</h1>
+      <h1>NTTM</h1>
       <p>مرورگر آفلاین NTTM بر بستر تانل گیت‌هاب رانر با مخفی‌کاری پیشرفته</p>
     </div>
 
@@ -1772,6 +1759,7 @@ class WebviewApiBridge:
             "token": getattr(self._ui.config, "github_token", ""),
             "repo": getattr(self._ui.config, "github_repo", ""),
             "branch": getattr(self._ui.config, "branch", "main"),
+            "encryption_key": getattr(self._ui.config, "encryption_key", ""),
         }
 
     def get_daemon_status(self) -> Dict[str, Any]:
@@ -1799,8 +1787,7 @@ class WebviewApiBridge:
                 self._ui.config.branch = branch.strip()
             if search_url:
                 self._ui.config.default_search_url = search_url.strip()
-            if encryption_key:
-                self._ui.config.encryption_key = encryption_key.strip()
+            self._ui.config.encryption_key = encryption_key.strip()
             self._ui.config.save()
             return {"success": True}
         except Exception as e:
