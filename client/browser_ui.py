@@ -1331,7 +1331,7 @@ class OfflineBrowserUI:
 """
 
     def _generate_start_page_html(self) -> str:
-        """Generates pure black start page with huge white N0pperabo logo and white buttons."""
+        """Generates the pure-black home screen with NTTM branding, full-width Digital Flame pyramid animation in white-to-grey spectrum, and clean dark UI."""
         token = getattr(self.config, "github_token", "")
         token_status = "ثبت شده" if token else "تنظیم نشده"
         repo_status = getattr(self.config, "github_repo", "") or "تنظیم نشده"
@@ -1368,17 +1368,34 @@ class OfflineBrowserUI:
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       padding: 24px;
     }}
 
+    /* Digital Flame Canvas: anchors behind the UI across the full width */
+    #flame-canvas {{
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 1.2s ease 0.2s;
+    }}
+    #flame-canvas.on {{
+      opacity: 1;
+    }}
+
     .container {{
-      max-width: 720px;
+      max-width: 960px;
       width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 32px;
+      gap: 26px;
+      position: relative;
+      z-index: 1;
+      margin: auto 0;
     }}
 
     /* Huge Hero Branding */
@@ -1386,7 +1403,7 @@ class OfflineBrowserUI:
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       text-align: center;
     }}
     .hero-logo-box {{
@@ -1397,22 +1414,53 @@ class OfflineBrowserUI:
       width: 100%;
     }}
     .hero-logo {{
-      width: 340px;
-      max-width: 85vw;
+      width: 680px;
+      max-width: min(92vw, 680px);
       height: auto;
       object-fit: contain;
       filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+      animation: igniteIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) backwards;
     }}
     .hero h1 {{
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 900;
-      letter-spacing: 2px;
+      letter-spacing: 4px;
       color: #ffffff;
+      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s backwards;
     }}
     .hero p {{
       color: var(--text-muted);
       font-size: 14px;
       line-height: 1.6;
+      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
+    }}
+
+    /* Arrival choreography: entrance plays once, then hands over to hover states. */
+    @keyframes igniteIn {{
+      0% {{
+        opacity: 0;
+        transform: scale(0.94);
+        filter: brightness(0);
+      }}
+      55% {{
+        opacity: 1;
+        filter: brightness(2.2) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+      }}
+      100% {{
+        opacity: 1;
+        transform: scale(1);
+        filter: brightness(1) drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+      }}
+    }}
+    @keyframes riseIn {{
+      from {{
+        opacity: 0;
+        transform: translateY(26px);
+      }}
+      to {{
+        opacity: 1;
+        transform: none;
+      }}
     }}
 
     /* Search Box */
@@ -1427,6 +1475,7 @@ class OfflineBrowserUI:
     }}
     .search-box:focus-within {{
       border-color: #ffffff;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
     }}
     .search-input-wrapper {{
       flex: 1;
@@ -1466,8 +1515,11 @@ class OfflineBrowserUI:
     .btn-search:hover {{
       background: #e5e5e5;
     }}
+    .btn-search:active {{
+      transform: scale(0.97);
+    }}
 
-    /* Quick Grid */
+    /* Fast Access Grid */
     .quick-grid {{
       width: 100%;
       display: grid;
@@ -1487,11 +1539,26 @@ class OfflineBrowserUI:
       transition: all 0.15s ease;
       text-decoration: none;
       color: #ffffff;
+      animation: riseIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
     }}
+    .quick-card:nth-child(1) {{ animation-delay: 0.28s; }}
+    .quick-card:nth-child(2) {{ animation-delay: 0.34s; }}
+    .quick-card:nth-child(3) {{ animation-delay: 0.40s; }}
+    .quick-card:nth-child(4) {{ animation-delay: 0.46s; }}
+    .quick-card:nth-child(5) {{ animation-delay: 0.52s; }}
+    .quick-card:nth-child(6) {{ animation-delay: 0.58s; }}
     .quick-card:hover {{
       background: #ffffff;
       border-color: #ffffff;
       color: #000000;
+      transform: translateY(-3px);
+    }}
+    .quick-card:active {{
+      transform: translateY(-1px) scale(0.97);
+    }}
+    .quick-card:focus-visible {{
+      outline: 2px solid #ffffff;
+      outline-offset: 2px;
     }}
     .quick-icon-svg {{
       width: 22px;
@@ -1527,6 +1594,7 @@ class OfflineBrowserUI:
       padding: 18px;
       font-size: 12.5px;
       line-height: 1.6;
+      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.66s backwards;
     }}
     .info-card h3 {{
       font-size: 13.5px;
@@ -1563,18 +1631,38 @@ class OfflineBrowserUI:
     .cfg-link:hover {{
       color: #a3a3a3;
     }}
+    .cfg-link:focus-visible {{
+      outline: 2px solid #ffffff;
+      outline-offset: 2px;
+    }}
 
     .footer {{
       font-size: 11.5px;
-      color: var(--text-dim);
+      color: #8a8a8a;
       font-family: ui-monospace, monospace;
       letter-spacing: 1px;
       margin-top: 10px;
+      text-align: center;
+      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.78s backwards;
+      /* Keeps the engine label readable where the white fire passes beneath it. */
+      text-shadow: 0 0 6px #000000, 0 0 3px rgba(0, 0, 0, 0.9);
+    }}
+
+    /* Motion off: entrance choreography stops; the engine paints ONE frozen
+       digital-flame frame plus a static spark bed, nothing loops. */
+    @media (prefers-reduced-motion: reduce) {{
+      .hero-logo, .hero h1, .hero p, .quick-card, .info-card, .footer {{
+        animation: none !important;
+      }}
+      #flame-canvas {{
+        transition: none;
+      }}
     }}
   </style>
 </head>
 <body>
-  <div class="container">
+  <canvas id="flame-canvas" aria-hidden="true"></canvas>
+  <main class="container">
     <!-- Huge Hero Branding -->
     <div class="hero">
       <div class="hero-logo-box">
@@ -1595,39 +1683,39 @@ class OfflineBrowserUI:
       <button class="btn-search" onclick="doSearch()">جستجو</button>
     </div>
 
-    <!-- Quick Access Grid -->
+    <!-- Fast Access Grid -->
     <div class="quick-grid">
-      <div class="quick-card" onclick="quickNav('https://www.google.com')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://www.google.com')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
         </div>
         <span class="quick-name">Google</span>
       </div>
-      <div class="quick-card" onclick="quickNav('https://duckduckgo.com')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://duckduckgo.com')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
         </div>
         <span class="quick-name">DuckDuckGo</span>
       </div>
-      <div class="quick-card" onclick="quickNav('https://www.youtube.com')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://www.youtube.com')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
         <span class="quick-name">YouTube</span>
       </div>
-      <div class="quick-card" onclick="quickNav('https://fa.wikipedia.org')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://fa.wikipedia.org')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         </div>
         <span class="quick-name">Wikipedia</span>
       </div>
-      <div class="quick-card" onclick="quickNav('https://github.com/explore')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://github.com/explore')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
         </div>
         <span class="quick-name">GitHub</span>
       </div>
-      <div class="quick-card" onclick="quickNav('https://stackoverflow.com')">
+      <div class="quick-card" role="button" tabindex="0" onclick="quickNav('https://stackoverflow.com')">
         <div class="quick-icon-svg">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         </div>
@@ -1648,14 +1736,14 @@ class OfflineBrowserUI:
         <p style="margin-bottom: 6px;"><strong>توکن دسترسی:</strong> <span class="badge badge-ok">{token_status}</span></p>
         <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#ffffff; font-family: ui-monospace, monospace;">{repo_status}</span></p>
         <p style="margin-bottom: 10px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
-        <p><a class="cfg-link" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات و کلیدهای ارتباطی</a></p>
+        <p><a class="cfg-link" role="button" tabindex="0" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات و کلیدهای ارتباطی</a></p>
       </div>
     </div>
 
-    <div class="footer">
+    <footer class="footer">
       N0PPERABO NTTM ENGINE • PURE BLACK STEALTH
-    </div>
-  </div>
+    </footer>
+  </main>
 
   <script>
     function quickNav(url) {{
@@ -1673,6 +1761,232 @@ class OfflineBrowserUI:
         quickNav('https://www.google.com/search?q=' + encodeURIComponent(query));
       }}
     }}
+
+    // Keyboard activation for the role="button" tiles.
+    document.querySelectorAll('[role="button"]').forEach(function (el) {{
+      el.addEventListener('keydown', function (e) {{
+        if (e.key === 'Enter' || e.key === ' ') {{
+          e.preventDefault();
+          el.click();
+        }}
+      }});
+    }});
+
+    // Ember drift: rising spark particles that complement the real white
+    // fire strip along the bottom edge. Additive compositing (the classic
+    // canvas flame walkthrough technique, thecodeplayer.com / davepagurek.com)
+    // makes overlaps glow, grayscale only to match the N0PPERABO monochrome face.
+    // The main fire lives in .fire-line (CC0 sprite strip, pure CSS playback).
+    // Digital Flame Engine: Procedural layered pyramid flame in white-to-grey spectrum.
+    // Base spans 100% of the screen width, tapering upwards to a graceful apex.
+    (function digitalFlame() {{
+      const canvas = document.getElementById('flame-canvas');
+      if (!canvas || !canvas.getContext) return;
+      const ctx = canvas.getContext('2d');
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let W = 0, H = 0;
+
+      function resize() {{
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = Math.floor(W * dpr);
+        canvas.height = Math.floor(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }}
+      window.addEventListener('resize', resize);
+      resize();
+
+      // Floating spark embers
+      const sparks = [];
+      const SPARK_COUNT = 85;
+      for (let i = 0; i < SPARK_COUNT; i++) {{
+        sparks.push({{
+          x: Math.random() * (W || 1000),
+          y: Math.random() * (H || 800),
+          vx: (Math.random() - 0.5) * 0.7,
+          vy: -(1.2 + Math.random() * 2.2),
+          size: 1.1 + Math.random() * 2.4,
+          alpha: 0.3 + Math.random() * 0.65,
+          life: Math.random() * 120
+        }});
+      }}
+
+      function draw(now) {{
+        ctx.clearRect(0, 0, W, H);
+        const t = now * 0.0018;
+
+        // Pyramid Dimensions
+        const flameHeight = Math.min(H * 0.84, 760);
+        const linesCount = 88;
+        const cx = W / 2;
+
+        // 1. Ambient Base Glow
+        const ambientGrad = ctx.createRadialGradient(cx, H, 20, cx, H - flameHeight * 0.45, W * 0.58);
+        ambientGrad.addColorStop(0, 'rgba(255, 255, 255, 0.09)');
+        ambientGrad.addColorStop(0.28, 'rgba(190, 200, 215, 0.045)');
+        ambientGrad.addColorStop(0.65, 'rgba(70, 80, 95, 0.015)');
+        ambientGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = ambientGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // 2. Central Flame Tongues (Fluid volumetric fire body)
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const tongues = [
+          {{ scaleH: 0.94, offset: 0, wFactor: 0.24, alpha: 0.22 }},
+          {{ scaleH: 0.84, offset: 2.1, wFactor: 0.38, alpha: 0.16 }},
+          {{ scaleH: 0.72, offset: 4.2, wFactor: 0.54, alpha: 0.11 }}
+        ];
+        tongues.forEach((tg) => {{
+          const topY = H - flameHeight * tg.scaleH;
+          const sway = Math.sin(t * 2.4 + tg.offset) * 28;
+          const tipX = cx + sway;
+          const w = (W * tg.wFactor) * (1 + 0.12 * Math.sin(t * 3.2 + tg.offset));
+
+          ctx.beginPath();
+          ctx.moveTo(cx - w, H);
+          ctx.bezierCurveTo(
+            cx - w * 0.72, H - flameHeight * 0.32,
+            tipX - w * 0.22, H - flameHeight * 0.68,
+            tipX, topY
+          );
+          ctx.bezierCurveTo(
+            tipX + w * 0.22, H - flameHeight * 0.68,
+            cx + w * 0.72, H - flameHeight * 0.32,
+            cx + w, H
+          );
+          ctx.closePath();
+
+          const grad = ctx.createLinearGradient(cx, H, tipX, topY);
+          grad.addColorStop(0, `rgba(255, 255, 255, ${{tg.alpha}})`);
+          grad.addColorStop(0.45, `rgba(210, 220, 235, ${{(tg.alpha * 0.75).toFixed(3)}})`);
+          grad.addColorStop(0.85, `rgba(255, 255, 255, ${{(tg.alpha * 1.3).toFixed(3)}})`);
+          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }});
+        ctx.restore();
+
+        // 3. Layered Geometric Wave Lines (Rhythmic digital contour flame)
+        ctx.save();
+        for (let i = 0; i < linesCount; i++) {{
+          const u = i / (linesCount - 1); // 0 at bottom, 1 at peak
+          const y = H - u * flameHeight;
+
+          // Pyramid silhouette: full width at bottom (u=0), tapering to apex (u=1)
+          const taper = Math.pow(1 - u, 1.22);
+          const upwardPhase = t * 3.6 - u * 8.2;
+          const waveSway = Math.sin(upwardPhase * 0.65 + u * 4.2) * (u * 42);
+          const centerLine = cx + waveSway;
+
+          const breath = 1 + 0.14 * Math.sin(upwardPhase * 1.1 + i * 0.22);
+          const halfWidth = (W * 0.53) * taper * breath + (1 - u) * (W * 0.08);
+
+          if (halfWidth < 4) continue;
+
+          const left = centerLine - halfWidth;
+          const right = centerLine + halfWidth;
+
+          ctx.beginPath();
+          const steps = 38;
+          for (let s = 0; s <= steps; s++) {{
+            const frac = s / steps;
+            const px = left + frac * (right - left);
+            const bell = Math.sin(frac * Math.PI);
+
+            const ripple1 = Math.sin(frac * 11.5 + upwardPhase * 2.1) * (6.5 * bell * (1 - u * 0.45));
+            const ripple2 = Math.cos(frac * 23.0 - t * 4.2) * (3.2 * bell * (1 - u * 0.7));
+            const py = y - (ripple1 + ripple2);
+
+            if (s === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }}
+
+          // White-to-Grey Gradient: Blazing white at center/top, silver mid, charcoal edges
+          const lineGrad = ctx.createLinearGradient(left, y, right, y);
+          const edgeLum = Math.floor(45 + 75 * (1 - u));
+          const midLum = Math.floor(185 + 55 * u);
+          const centerLum = 255;
+
+          const alphaCore = Math.min(1.0, 0.45 + 0.55 * u);
+          const alphaMid = 0.32 + 0.38 * u;
+          const alphaEdge = 0.08 + 0.18 * (1 - u);
+
+          lineGrad.addColorStop(0, `rgba(${{edgeLum}}, ${{edgeLum}}, ${{edgeLum}}, ${{alphaEdge.toFixed(3)}})`);
+          lineGrad.addColorStop(0.24, `rgba(${{midLum}}, ${{midLum}}, ${{midLum}}, ${{alphaMid.toFixed(3)}})`);
+          lineGrad.addColorStop(0.5, `rgba(${{centerLum}}, ${{centerLum}}, ${{centerLum}}, ${{alphaCore.toFixed(3)}})`);
+          lineGrad.addColorStop(0.76, `rgba(${{midLum}}, ${{midLum}}, ${{midLum}}, ${{alphaMid.toFixed(3)}})`);
+          lineGrad.addColorStop(1, `rgba(${{edgeLum}}, ${{edgeLum}}, ${{edgeLum}}, ${{alphaEdge.toFixed(3)}})`);
+
+          ctx.strokeStyle = lineGrad;
+          ctx.lineWidth = Math.max(1, 2.7 * (1 - u * 0.6));
+          ctx.stroke();
+
+          // Intense core beam along the pyramid spine
+          if (i % 3 === 0 && u > 0.12) {{
+            ctx.beginPath();
+            const coreSpan = halfWidth * (0.22 + 0.22 * (1 - u));
+            ctx.moveTo(centerLine - coreSpan, y);
+            ctx.lineTo(centerLine + coreSpan, y);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${{(0.65 * (1 - u * 0.25)).toFixed(3)}})`;
+            ctx.lineWidth = Math.max(1, 1.6 * (1 - u * 0.5));
+            ctx.stroke();
+          }}
+        }}
+        ctx.restore();
+
+        // 4. Floating Rising Sparks within Pyramid Bounds
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        sparks.forEach((sp) => {{
+          sp.y += sp.vy;
+          sp.x += sp.vx + Math.sin(t * 3.2 + sp.life * 0.09) * 0.55;
+          sp.life += 1;
+
+          if (sp.y < H - flameHeight * 1.08 || sp.life > 140) {{
+            sp.y = H + 6;
+            sp.x = Math.random() * W;
+            sp.life = 0;
+            sp.vy = -(1.2 + Math.random() * 2.4);
+          }}
+
+          const uSpark = (H - sp.y) / flameHeight;
+          const maxDist = (W * 0.54) * Math.max(0.06, Math.pow(1 - Math.min(1, uSpark), 1.15));
+          const distFromCenter = Math.abs(sp.x - cx);
+
+          if (distFromCenter < maxDist * 1.12) {{
+            const sparkFade = 1 - Math.min(1, sp.life / 140);
+            const sparkAlpha = sp.alpha * sparkFade;
+
+            ctx.fillStyle = `rgba(255, 255, 255, ${{sparkAlpha.toFixed(3)}})`;
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, sp.size * sparkFade, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Luminous halo
+            ctx.fillStyle = `rgba(210, 225, 240, ${{(sparkAlpha * 0.38).toFixed(3)}})`;
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, sp.size * 2.6 * sparkFade, 0, Math.PI * 2);
+            ctx.fill();
+          }}
+        }});
+        ctx.restore();
+      }}
+
+      canvas.classList.add('on');
+
+      if (!reduced) {{
+        function loop(now) {{
+          requestAnimationFrame(loop);
+          if (document.hidden) return;
+          draw(now);
+        }}
+        requestAnimationFrame(loop);
+      }} else {{
+        draw(1200);
+      }}
+    }})();
   </script>
 </body>
 </html>
