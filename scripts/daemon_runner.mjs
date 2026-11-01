@@ -512,7 +512,20 @@ async function processRequest(browser, requestData, requestId, workDir) {
             }
           } else if (act.type === 'click') {
             if (el) await el.click({ timeout: 5000 });
+            else if (act.href) await page.goto(act.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
             else if (act.x !== undefined && act.y !== undefined) await page.mouse.click(act.x, act.y);
+            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+          } else if (act.type === 'submit') {
+            if (el) {
+              await el.evaluate((f) => {
+                if (typeof f.requestSubmit === 'function') f.requestSubmit();
+                else f.submit();
+              }).catch(async () => {
+                await el.press('Enter').catch(() => {});
+              });
+            } else {
+              await page.keyboard.press('Enter');
+            }
             await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
           } else if (act.type === 'select') {
             if (el) await el.selectOption(act.value || '');
@@ -748,6 +761,18 @@ async function resolveElement(page, action) {
   if (action.text_hint) {
     try {
       const loc = page.getByText(action.text_hint, { exact: false }).first();
+      if ((await loc.count()) > 0) return loc;
+    } catch {}
+  }
+  if (action.placeholder) {
+    try {
+      const loc = page.getByPlaceholder(action.placeholder, { exact: false }).first();
+      if ((await loc.count()) > 0) return loc;
+    } catch {}
+  }
+  if (action.href) {
+    try {
+      const loc = page.locator(`a[href="${action.href}"]`).first();
       if ((await loc.count()) > 0) return loc;
     } catch {}
   }

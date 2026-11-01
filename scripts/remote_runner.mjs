@@ -372,8 +372,25 @@ async function main() {
             case 'click':
               if (el) {
                 await el.click({ timeout: 5000 });
+              } else if (action.href) {
+                console.log(`[Runner] Click target not found, navigating directly to action.href: ${action.href}`);
+                await page.goto(action.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
               } else if (action.x !== undefined && action.y !== undefined) {
                 await page.mouse.click(action.x, action.y);
+              }
+              await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+              break;
+
+            case 'submit':
+              if (el) {
+                await el.evaluate((f) => {
+                  if (typeof f.requestSubmit === 'function') f.requestSubmit();
+                  else f.submit();
+                }).catch(async () => {
+                  await el.press('Enter').catch(() => {});
+                });
+              } else {
+                await page.keyboard.press('Enter');
               }
               await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
               break;
@@ -598,6 +615,22 @@ async function resolveElement(page, action) {
   if (action.text_hint) {
     try {
       const loc = page.getByText(action.text_hint, { exact: false }).first();
+      if ((await loc.count()) > 0) return loc;
+    } catch {}
+  }
+
+  // 4. Placeholder
+  if (action.placeholder) {
+    try {
+      const loc = page.getByPlaceholder(action.placeholder, { exact: false }).first();
+      if ((await loc.count()) > 0) return loc;
+    } catch {}
+  }
+
+  // 5. Href for links
+  if (action.href) {
+    try {
+      const loc = page.locator(`a[href="${action.href}"]`).first();
       if ((await loc.count()) > 0) return loc;
     } catch {}
   }

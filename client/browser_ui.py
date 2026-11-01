@@ -1249,14 +1249,17 @@ class OfflineBrowserUI:
 
         if (this.isBatchMode) {
           toggle.classList.add('batch');
-          text.textContent = 'مد دسته‌ای';
+          text.textContent = 'مد دسته‌ای (فعال)';
           sendBtn.style.display = 'flex';
           qBar.classList.add('active');
+          this.showToast('مد دسته‌ای فعال شد: کلیک‌ها و تایپ‌ها در صف ضبط می‌شوند.');
+          this.injectDeepInterceptor();
         } else {
           toggle.classList.remove('batch');
           text.textContent = 'مد مستقیم';
           sendBtn.style.display = 'none';
           qBar.classList.remove('active');
+          this.showToast('مد مستقیم فعال شد: اقدامات بلافاصله ارسال می‌شوند.');
         }
 
         if (window.pywebview && window.pywebview.api) {
@@ -1306,17 +1309,64 @@ class OfflineBrowserUI:
       },
 
       queueAction: function(action) {
+        // Smart debouncing: if typing in the same input, update value instead of adding duplicate items
+        if (action.type === 'fill') {
+          const last = this.queue[this.queue.length - 1];
+          if (last && last.type === 'fill' && last.selector === action.selector) {
+            last.value = action.value;
+            this.renderQueue();
+            return;
+          }
+        }
         this.queue.push(action);
         this.renderQueue();
       },
 
+      removeQueueItem: function(idx) {
+        if (idx >= 0 && idx < this.queue.length) {
+          this.queue.splice(idx, 1);
+          this.renderQueue();
+        }
+      },
+
       renderQueue: function() {
         const container = document.getElementById('queue-items');
+        if (!container) return;
         container.innerHTML = '';
+        if (this.queue.length === 0) {
+          container.innerHTML = '<span style="color:#737373; font-size:11px;">هیچ اقدامی ثبت نشده است. روی صفحه کلیک یا تایپ کنید.</span>';
+          return;
+        }
         this.queue.forEach((item, idx) => {
           const div = document.createElement('div');
           div.className = 'queue-item';
-          div.innerHTML = '<span style="color:#ffffff; font-weight:700;">' + item.type + '</span> <span>' + (item.selector || item.text || item.key || '') + '</span>';
+
+          let typeColor = '#3b82f6';
+          let typeText = item.type.toUpperCase();
+          let summary = item.text_hint || item.selector || item.key || item.value || '';
+          if (item.type === 'fill') {
+            typeColor = '#06b6d4';
+            summary = (item.name ? item.name + '=' : '') + '"' + (item.value || '') + '"';
+          } else if (item.type === 'click') {
+            typeColor = '#10b981';
+            summary = item.text_hint ? ('"' + item.text_hint + '"') : (item.selector || 'element');
+          } else if (item.type === 'press') {
+            typeColor = '#a855f7';
+            summary = 'کلید: ' + (item.key || 'Enter');
+          } else if (item.type === 'select') {
+            typeColor = '#f59e0b';
+            summary = 'انتخاب: ' + (item.value || '');
+          } else if (item.type === 'check') {
+            typeColor = '#eab308';
+            summary = (item.checked ? '✓ انتخاب' : '✗ عدم انتخاب') + ' ' + (item.selector || '');
+          } else if (item.type === 'submit') {
+            typeColor = '#ef4444';
+            summary = 'ارسال فرم: ' + (item.selector || '');
+          }
+
+          div.innerHTML = '<span style="background:' + typeColor + '; color:#000000; font-weight:800; padding:1px 5px; border-radius:3px; font-size:10px;">' + typeText + '</span> ' +
+            '<span style="color:#ffffff; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + (item.selector || '') + '">' + summary + '</span> ' +
+            '<button onclick="window.shellApp.removeQueueItem(' + idx + ')" style="background:transparent; border:none; color:#ef4444; font-size:13px; font-weight:700; cursor:pointer; padding:0 3px; line-height:1;" title="حذف این اقدام">&times;</button>';
           container.appendChild(div);
         });
       },
@@ -1330,15 +1380,21 @@ class OfflineBrowserUI:
       },
 
       triggerBatch: function() {
-        if (this.queue.length === 0) {
-          alert('صف رویدادها خالی است.');
+        if (!this.queue || this.queue.length === 0) {
+          this.showToast('صف اقدامات خالی است. ابتدا روی صفحه کلیک یا تایپ کنید.', true);
           return;
         }
-        this.showLoading('در حال ارسال صف اکشن‌ها به گیت‌هاب...');
+        const targetUrl = this.currentLiveUrl || document.getElementById('url-input').value;
+        if (!targetUrl || targetUrl.includes('/start') || targetUrl === 'about:blank') {
+          this.showToast('آدرس صفحه مشخص نیست. لطفاً ابتدا به یک صفحه وب بروید.', true);
+          return;
+        }
         const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
+        this.showLoading('در حال ارسال ' + this.queue.length + ' اقدام زنجیره‌ای به گیت‌هاب...');
+        const actionsToSend = [...this.queue];
+        this.clearQueue();
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.run_batch_actions(this.currentLiveUrl, this.queue, delay);
-          this.clearQueue();
+          window.pywebview.api.run_batch_actions(targetUrl, actionsToSend, delay);
         }
       },
 
@@ -1397,52 +1453,286 @@ class OfflineBrowserUI:
 
           doc._injectedNTTM = true;
 
+          // Visual feedback styles for captured elements
+          const style = doc.createElement('style');
+          style.textContent = `
+            @keyframes nttmCapturedFlash {
+              0% { outline: 3px solid #ffffff !important; box-shadow: 0 0 14px rgba(255,255,255,0.9) !important; }
+              100% { outline: 3px solid transparent !important; box-shadow: none !important; }
+            }
+            .nttm-captured-flash {
+              animation: nttmCapturedFlash 0.75s ease-out !important;
+            }
+          `;
+          doc.head.appendChild(style);
+
           const script = doc.createElement('script');
           script.textContent = `
             (function() {
-              function getBestSelector(el) {
-                if (!el || el === document.body) return 'body';
-                if (el.id) return '#' + el.id;
-                if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
-                if (el.className && typeof el.className === 'string') {
-                  const c = el.className.trim().split(/\\s+/)[0];
-                  if (c) return el.tagName.toLowerCase() + '.' + c;
-                }
-                return el.tagName.toLowerCase();
+              function flashElement(el) {
+                if (!el || !el.classList) return;
+                el.classList.remove('nttm-captured-flash');
+                void el.offsetWidth;
+                el.classList.add('nttm-captured-flash');
+                setTimeout(() => el.classList.remove('nttm-captured-flash'), 800);
               }
 
+              function getElementInfo(el) {
+                if (!el || el === document.body || el === document.documentElement) {
+                  return { selector: 'body', xpath: '//body' };
+                }
+
+                const rect = el.getBoundingClientRect();
+                const x = Math.round(rect.left + rect.width / 2);
+                const y = Math.round(rect.top + rect.height / 2);
+                const textHint = (el.innerText || el.value || el.title || el.getAttribute('aria-label') || '').trim().slice(0, 50);
+
+                // 1. Unique ID
+                if (el.id && !/^\d/.test(el.id)) {
+                  try {
+                    if (document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
+                      return {
+                        selector: '#' + CSS.escape(el.id),
+                        xpath: '//*[@id="' + el.id + '"]',
+                        x: x, y: y, textHint: textHint
+                      };
+                    }
+                  } catch(e) {}
+                }
+
+                // 2. Unique name attribute
+                if (el.name && el.tagName) {
+                  const tag = el.tagName.toLowerCase();
+                  const sel = tag + '[name="' + CSS.escape(el.name) + '"]';
+                  try {
+                    if (document.querySelectorAll(sel).length === 1) {
+                      return {
+                        selector: sel,
+                        xpath: '//' + tag + '[@name="' + el.name + '"]',
+                        x: x, y: y, textHint: textHint, name: el.name
+                      };
+                    }
+                  } catch(e) {}
+                }
+
+                // 3. Unique attributes: data-testid, aria-label, placeholder, title, role
+                const tag = el.tagName.toLowerCase();
+                for (const attr of ['data-testid', 'aria-label', 'placeholder', 'title', 'role']) {
+                  const val = el.getAttribute(attr);
+                  if (val && val.length < 80) {
+                    try {
+                      const sel = tag + '[' + attr + '="' + CSS.escape(val) + '"]';
+                      if (document.querySelectorAll(sel).length === 1) {
+                        return {
+                          selector: sel,
+                          xpath: '//' + tag + '[@' + attr + '="' + val + '"]',
+                          x: x, y: y, textHint: textHint, placeholder: (attr === 'placeholder' ? val : '')
+                        };
+                      }
+                    } catch(e) {}
+                  }
+                }
+
+                // 4. Hierarchical CSS path
+                function getCssPath(curr) {
+                  const parts = [];
+                  let node = curr;
+                  while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.body && parts.length < 5) {
+                    let part = node.tagName.toLowerCase();
+                    if (node.id && !/^\d/.test(node.id)) {
+                      part += '#' + CSS.escape(node.id);
+                      parts.unshift(part);
+                      break;
+                    }
+                    let sibling = node;
+                    let nth = 1;
+                    while (sibling = sibling.previousElementSibling) {
+                      if (sibling.tagName === node.tagName) nth++;
+                    }
+                    part += ':nth-of-type(' + nth + ')';
+                    parts.unshift(part);
+                    node = node.parentElement;
+                  }
+                  return parts.join(' > ');
+                }
+
+                // 5. XPath
+                function getXPath(curr) {
+                  if (curr.id) return '//*[@id="' + curr.id + '"]';
+                  const segments = [];
+                  let node = curr;
+                  for (; node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement; node = node.parentNode) {
+                    let count = 1;
+                    for (let sib = node.previousSibling; sib; sib = sib.previousSibling) {
+                      if (sib.nodeType === 1 && sib.tagName === node.tagName) count++;
+                    }
+                    segments.unshift(node.tagName.toLowerCase() + '[' + count + ']');
+                  }
+                  return '/' + segments.join('/');
+                }
+
+                return {
+                  selector: getCssPath(el),
+                  xpath: getXPath(el),
+                  x: x, y: y, textHint: textHint
+                };
+              }
+
+              // --- 1. CLICK Interception ---
               document.addEventListener('click', function(e) {
-                let target = e.target.closest('a') || e.target.closest('button') || e.target.closest('input[type="submit"]') || e.target;
-                if (target) {
-                  let href = target.getAttribute('href');
-                  if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const absoluteUrl = new URL(href, window.location.href).href;
-                    window.parent.shellApp.navigate(absoluteUrl);
-                    return false;
+                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
+                const target = e.target.closest('a') || e.target.closest('button') || e.target.closest('input[type="submit"]') || e.target.closest('input[type="button"]') || e.target.closest('[role="button"]') || e.target;
+                if (!target) return;
+
+                const tag = target.tagName.toLowerCase();
+                const isInput = tag === 'input' && !['submit', 'button', 'checkbox', 'radio'].includes(target.type);
+                const isTextarea = tag === 'textarea';
+
+                // In Batch Mode:
+                if (isBatch) {
+                  // Do not prevent click on text inputs/textareas so user can focus & type freely!
+                  if (isInput || isTextarea) {
+                    return;
                   }
 
-                  if (window.parent.shellApp.isBatchMode) {
+                  // Checkboxes & Radios: let them toggle state in UI, then record check
+                  if (tag === 'input' && ['checkbox', 'radio'].includes(target.type)) {
+                    setTimeout(() => {
+                      const info = getElementInfo(target);
+                      window.parent.shellApp.queueAction({
+                        type: 'check',
+                        selector: info.selector,
+                        xpath: info.xpath,
+                        checked: target.checked
+                      });
+                      flashElement(target);
+                    }, 40);
+                    return;
+                  }
+
+                  // Prevent navigation/default submit in Batch Mode and queue the action
+                  e.preventDefault();
+                  e.stopPropagation();
+
+                  const info = getElementInfo(target);
+                  const href = target.getAttribute('href');
+                  const fullHref = href ? new URL(href, window.location.href).href : '';
+
+                  flashElement(target);
+
+                  window.parent.shellApp.queueAction({
+                    type: 'click',
+                    selector: info.selector,
+                    xpath: info.xpath,
+                    text_hint: info.textHint,
+                    href: fullHref,
+                    x: info.x,
+                    y: info.y
+                  });
+                  return false;
+                }
+
+                // In Direct Mode: normal link navigation
+                const href = target.getAttribute('href');
+                if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const absoluteUrl = new URL(href, window.location.href).href;
+                  window.parent.shellApp.navigate(absoluteUrl);
+                  return false;
+                }
+              }, true);
+
+              // --- 2. INPUT & CHANGE Interception (Typing in fields) ---
+              function handleInput(e) {
+                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
+                if (!isBatch) return;
+
+                const target = e.target;
+                if (!target || !target.tagName) return;
+                const tag = target.tagName.toLowerCase();
+
+                if (tag === 'input' || tag === 'textarea') {
+                  if (['submit', 'button', 'checkbox', 'radio'].includes(target.type)) return;
+                  const info = getElementInfo(target);
+                  window.parent.shellApp.queueAction({
+                    type: 'fill',
+                    selector: info.selector,
+                    xpath: info.xpath,
+                    value: target.value,
+                    name: target.name || target.id || '',
+                    placeholder: target.placeholder || '',
+                    text_hint: info.textHint,
+                    x: info.x,
+                    y: info.y
+                  });
+                } else if (tag === 'select') {
+                  const info = getElementInfo(target);
+                  window.parent.shellApp.queueAction({
+                    type: 'select',
+                    selector: info.selector,
+                    xpath: info.xpath,
+                    value: target.value,
+                    text_hint: target.selectedOptions && target.selectedOptions[0] ? target.selectedOptions[0].text : target.value
+                  });
+                  flashElement(target);
+                }
+              }
+
+              document.addEventListener('input', handleInput, true);
+              document.addEventListener('change', handleInput, true);
+
+              // --- 3. KEYDOWN Interception (Enter on search/form inputs) ---
+              document.addEventListener('keydown', function(e) {
+                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
+                if (!isBatch) return;
+
+                if (e.key === 'Enter') {
+                  const target = e.target;
+                  if (target && (target.tagName.toLowerCase() === 'input' || target.tagName.toLowerCase() === 'textarea')) {
                     e.preventDefault();
                     e.stopPropagation();
+
+                    const info = getElementInfo(target);
+                    // Ensure final typed value is queued
                     window.parent.shellApp.queueAction({
-                      type: 'click',
-                      selector: getBestSelector(target)
+                      type: 'fill',
+                      selector: info.selector,
+                      xpath: info.xpath,
+                      value: target.value,
+                      name: target.name || target.id || '',
+                      x: info.x,
+                      y: info.y
                     });
+
+                    // Queue Enter press
+                    window.parent.shellApp.queueAction({
+                      type: 'press',
+                      key: 'Enter',
+                      selector: info.selector,
+                      xpath: info.xpath,
+                      x: info.x,
+                      y: info.y
+                    });
+                    flashElement(target);
                     return false;
                   }
                 }
               }, true);
 
+              // --- 4. FORM SUBMIT Interception ---
               document.addEventListener('submit', function(e) {
-                if (window.parent.shellApp.isBatchMode) {
+                const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
+                if (isBatch) {
                   e.preventDefault();
                   e.stopPropagation();
+                  const info = getElementInfo(e.target);
                   window.parent.shellApp.queueAction({
                     type: 'submit',
-                    selector: getBestSelector(e.target)
+                    selector: info.selector,
+                    xpath: info.xpath
                   });
+                  flashElement(e.target);
                   return false;
                 }
               }, true);
