@@ -375,7 +375,7 @@ class OfflineBrowserUI:
 
     # ---------------- HTML UI Templates ----------------
     def _generate_shell_html(self) -> str:
-        """Generates the top-level browser shell with modern Anti-Slop compliant UI."""
+        """Generates pure OLED black UI shell with white buttons and complete onPageLoaded handler."""
         return r"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -384,20 +384,17 @@ class OfflineBrowserUI:
   <title>N0PPERABO - مرورگر آفلاین NTTM</title>
   <style>
     :root {
-      --bg-base: #090b10;
-      --bg-surface: #11141c;
-      --bg-surface-elevated: #161b26;
-      --border-subtle: #232a3b;
-      --border-focus: #3b82f6;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-rose: #ef4444;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --toolbar-height: 56px;
+      --bg-base: #000000;
+      --bg-surface: #0c0c0c;
+      --bg-surface-elevated: #161616;
+      --border-subtle: #262626;
+      --border-focus: #ffffff;
+      --btn-white-bg: #ffffff;
+      --btn-white-text: #000000;
+      --text: #ffffff;
+      --text-muted: #a3a3a3;
+      --text-dim: #737373;
+      --toolbar-height: 60px;
     }
     * {
       box-sizing: border-box;
@@ -422,8 +419,8 @@ class OfflineBrowserUI:
       border-bottom: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 0 14px;
+      gap: 12px;
+      padding: 0 16px;
       z-index: 100;
     }
 
@@ -431,50 +428,50 @@ class OfflineBrowserUI:
     .brand-badge {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       padding: 4px 8px;
       background: transparent;
       border: 1px solid transparent;
       border-radius: 6px;
       cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease;
+      transition: background 0.15s ease;
       flex-shrink: 0;
     }
     .brand-badge:hover {
-      background: rgba(255, 255, 255, 0.04);
+      background: #1a1a1a;
       border-color: var(--border-subtle);
     }
     .brand-logo-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 24px;
+      height: 38px;
     }
     .toolbar-logo {
-      height: 22px;
+      height: 36px;
       width: auto;
       object-fit: contain;
     }
     .brand-title {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.8px;
-      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #ffffff;
     }
 
-    /* Navigation Group */
+    /* Navigation Buttons */
     .nav-group, .actions-group {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       flex-shrink: 0;
     }
     .btn-nav {
-      background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      width: 32px;
-      height: 32px;
+      background: #141414;
+      border: 1px solid #333333;
+      color: #ffffff;
+      width: 34px;
+      height: 34px;
       border-radius: 6px;
       cursor: pointer;
       display: flex;
@@ -483,12 +480,12 @@ class OfflineBrowserUI:
       transition: all 0.15s ease;
     }
     .btn-nav:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: var(--text-muted);
-      color: var(--text);
+      background: #ffffff;
+      color: #000000;
+      border-color: #ffffff;
     }
     .btn-nav:active {
-      background: rgba(255, 255, 255, 0.08);
+      transform: scale(0.95);
     }
 
     /* Address Bar */
@@ -496,16 +493,16 @@ class OfflineBrowserUI:
       flex: 1;
       display: flex;
       align-items: center;
-      background: var(--bg-base);
-      border: 1px solid var(--border-subtle);
+      background: #000000;
+      border: 1px solid #333333;
       border-radius: 6px;
-      padding: 2px 10px;
+      padding: 3px 10px;
       gap: 8px;
       transition: border-color 0.15s ease;
-      min-width: 180px;
+      min-width: 200px;
     }
     .url-bar-container:focus-within {
-      border-color: var(--border-focus);
+      border-color: #ffffff;
     }
     .url-icon {
       display: flex;
@@ -516,8 +513,8 @@ class OfflineBrowserUI:
       flex: 1;
       background: transparent;
       border: none;
-      color: var(--text);
-      font-size: 13px;
+      color: #ffffff;
+      font-size: 13.5px;
       font-family: ui-monospace, 'SF Mono', 'Segoe UI Mono', monospace;
       outline: none;
       direction: ltr;
@@ -531,91 +528,91 @@ class OfflineBrowserUI:
       direction: rtl;
       text-align: right;
     }
-    .btn-go {
-      background: var(--primary);
-      color: #ffffff;
+
+    /* White Action Buttons */
+    .btn-white {
+      background: #ffffff;
+      color: #000000;
       border: none;
-      padding: 5px 14px;
-      border-radius: 4px;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .btn-white:hover {
+      background: #e5e5e5;
+    }
+    .btn-white:active {
+      transform: scale(0.96);
+    }
+
+    /* Action Buttons (Dark with white border) */
+    .btn-action-dark {
+      background: #141414;
+      border: 1px solid #444444;
+      color: #ffffff;
+      padding: 6px 12px;
+      border-radius: 6px;
       cursor: pointer;
       font-size: 12.5px;
       font-weight: 600;
-      transition: background 0.15s ease;
-      flex-shrink: 0;
-    }
-    .btn-go:hover {
-      background: var(--primary-hover);
-    }
-    .btn-go:active {
-      transform: translateY(1px);
-    }
-
-    /* Mode Toggle */
-    .mode-toggle {
       display: flex;
       align-items: center;
-      gap: 7px;
-      background: transparent;
-      padding: 5px 10px;
+      gap: 6px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .btn-action-dark:hover {
+      background: #ffffff;
+      color: #000000;
+      border-color: #ffffff;
+    }
+    .btn-action-dark:active {
+      transform: scale(0.96);
+    }
+
+    /* Mode & Daemon Badges */
+    .badge-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #141414;
+      padding: 6px 10px;
       border-radius: 6px;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid #333333;
       cursor: pointer;
       font-size: 12px;
-      font-weight: 500;
-      color: var(--text-muted);
+      font-weight: 600;
+      color: #ffffff;
       user-select: none;
       transition: all 0.15s ease;
       flex-shrink: 0;
     }
-    .mode-toggle:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
+    .badge-toggle:hover {
+      border-color: #ffffff;
     }
-    .mode-dot {
+    .badge-toggle.active {
+      background: #ffffff;
+      color: #000000;
+      border-color: #ffffff;
+    }
+    .dot-indicator {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--accent-emerald);
+      background: #10b981;
     }
-    .mode-toggle.batch .mode-dot {
-      background: var(--accent-amber);
+    .badge-toggle.batch .dot-indicator {
+      background: #f59e0b;
     }
-
-    /* Daemon Fast Mode Toggle */
-    .daemon-btn {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      background: transparent;
-      padding: 5px 10px;
-      border-radius: 6px;
-      border: 1px solid var(--border-subtle);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-muted);
-      user-select: none;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
-    .daemon-btn:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-    }
-    .daemon-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--text-dim);
-      transition: background 0.15s ease;
-    }
-    .daemon-btn.active {
-      border-color: rgba(16, 185, 129, 0.4);
-      color: #34d399;
-      background: rgba(16, 185, 129, 0.08);
-    }
-    .daemon-btn.active .daemon-dot {
-      background: var(--accent-emerald);
+    .badge-toggle.active .dot-indicator {
+      background: #000000;
     }
 
     /* Custom Delay Controls */
@@ -623,88 +620,62 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 6px;
-      background: transparent;
+      background: #141414;
       padding: 4px 8px;
       border-radius: 6px;
-      border: 1px solid var(--border-subtle);
+      border: 1px solid #333333;
       transition: all 0.15s ease;
       flex-shrink: 0;
     }
     .delay-container:hover {
-      background: rgba(255, 255, 255, 0.04);
+      border-color: #ffffff;
     }
     .delay-container.active {
-      border-color: rgba(245, 158, 11, 0.5);
-      background: rgba(245, 158, 11, 0.08);
+      background: #ffffff;
+      border-color: #ffffff;
     }
     .delay-btn {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       cursor: pointer;
       font-size: 12px;
       user-select: none;
-      color: var(--text-muted);
+      color: #ffffff;
+      font-weight: 600;
     }
     .delay-container.active .delay-btn {
-      color: #fbbf24;
-      font-weight: 600;
+      color: #000000;
     }
     .delay-input-box {
       display: flex;
       align-items: center;
       gap: 4px;
-      border-right: 1px solid var(--border-subtle);
+      border-right: 1px solid #333333;
       padding-right: 6px;
       margin-right: 2px;
     }
     .delay-input-box input {
       width: 40px;
-      background: var(--bg-base);
-      border: 1px solid var(--border-subtle);
-      color: #fbbf24;
+      background: #000000;
+      border: 1px solid #444444;
+      color: #ffffff;
       padding: 2px 4px;
       border-radius: 4px;
       font-size: 12px;
       font-family: ui-monospace, monospace;
-      font-weight: 600;
+      font-weight: 700;
       text-align: center;
       outline: none;
       direction: ltr;
-    }
-    .delay-input-box input:focus {
-      border-color: #fbbf24;
-    }
-
-    /* Action Buttons */
-    .action-btn {
-      background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--text);
-      padding: 5px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
-    .action-btn:hover {
-      background: rgba(255, 255, 255, 0.05);
-      border-color: var(--text-muted);
-    }
-    .action-btn:active {
-      background: rgba(255, 255, 255, 0.08);
     }
 
     /* Batch Queue Bar */
     .queue-bar {
       display: none;
-      background: var(--bg-surface-elevated);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 6px 14px;
+      background: #0c0c0c;
+      border-bottom: 1px solid #262626;
+      padding: 8px 16px;
       align-items: center;
       gap: 12px;
       z-index: 90;
@@ -715,11 +686,10 @@ class OfflineBrowserUI:
       display: flex;
       gap: 6px;
       overflow-x: auto;
-      scrollbar-width: none;
     }
     .queue-item {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
+      background: #161616;
+      border: 1px solid #333333;
       padding: 3px 8px;
       border-radius: 4px;
       font-size: 11.5px;
@@ -729,35 +699,32 @@ class OfflineBrowserUI:
       gap: 6px;
       white-space: nowrap;
     }
-    .queue-item .type {
-      color: var(--primary);
-      font-weight: 600;
-    }
 
     /* Content Area */
     .content-area {
       flex: 1;
       position: relative;
-      background: #ffffff;
+      background: #000000;
     }
     iframe {
       width: 100%;
       height: 100%;
       border: none;
       display: block;
+      background: #000000;
     }
 
     /* Status Bar */
     .status-bar {
-      height: 24px;
-      background: var(--bg-surface);
-      border-top: 1px solid var(--border-subtle);
+      height: 26px;
+      background: #0c0c0c;
+      border-top: 1px solid #262626;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px;
-      font-size: 11.5px;
-      color: var(--text-dim);
+      padding: 0 14px;
+      font-size: 12px;
+      color: var(--text-muted);
     }
     .status-text {
       display: flex;
@@ -769,20 +736,20 @@ class OfflineBrowserUI:
     .loading-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(9, 11, 16, 0.85);
+      background: rgba(0, 0, 0, 0.88);
       display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 14px;
       z-index: 200;
     }
     .loading-overlay.active { display: flex; }
-    .cyber-spinner {
-      width: 36px;
-      height: 36px;
-      border: 2px solid var(--border-subtle);
-      border-top-color: var(--primary);
+    .spinner-ring {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #262626;
+      border-top-color: #ffffff;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -790,16 +757,16 @@ class OfflineBrowserUI:
       to { transform: rotate(360deg); }
     }
     .loading-text {
-      font-size: 13px;
-      color: var(--text-muted);
-      font-weight: 500;
+      font-size: 13.5px;
+      color: #ffffff;
+      font-weight: 600;
     }
 
     /* Settings Modal */
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.85);
       display: none;
       align-items: center;
       justify-content: center;
@@ -807,19 +774,19 @@ class OfflineBrowserUI:
     }
     .modal-overlay.active { display: flex; }
     .modal {
-      background: var(--bg-surface-elevated);
-      border: 1px solid var(--border-subtle);
+      background: #0f0f0f;
+      border: 1px solid #333333;
       border-radius: 8px;
       width: 480px;
       max-width: 90vw;
-      padding: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
     }
     .modal h2 {
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 700;
-      margin-bottom: 16px;
-      color: var(--text);
+      margin-bottom: 18px;
+      color: #ffffff;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -832,14 +799,14 @@ class OfflineBrowserUI:
       font-size: 12px;
       color: var(--text-muted);
       margin-bottom: 6px;
-      font-weight: 500;
+      font-weight: 600;
     }
     .form-group input {
       width: 100%;
-      background: var(--bg-base);
-      border: 1px solid var(--border-subtle);
-      color: var(--text);
-      padding: 8px 10px;
+      background: #000000;
+      border: 1px solid #333333;
+      color: #ffffff;
+      padding: 9px 12px;
       border-radius: 6px;
       font-size: 13px;
       font-family: ui-monospace, monospace;
@@ -847,39 +814,39 @@ class OfflineBrowserUI:
       direction: ltr;
     }
     .form-group input:focus {
-      border-color: var(--border-focus);
+      border-color: #ffffff;
     }
     .modal-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
-      margin-top: 18px;
+      gap: 10px;
+      margin-top: 20px;
     }
     .btn-modal-cancel {
       background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      padding: 6px 14px;
+      border: 1px solid #444444;
+      color: #ffffff;
+      padding: 7px 16px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 12.5px;
-    }
-    .btn-modal-cancel:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-    }
-    .btn-modal-save {
-      background: var(--primary);
-      border: none;
-      color: #fff;
-      padding: 6px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 600;
     }
+    .btn-modal-cancel:hover {
+      background: #222222;
+    }
+    .btn-modal-save {
+      background: #ffffff;
+      border: none;
+      color: #000000;
+      padding: 7px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
     .btn-modal-save:hover {
-      background: var(--primary-hover);
+      background: #e5e5e5;
     }
   </style>
 </head>
@@ -887,7 +854,7 @@ class OfflineBrowserUI:
 
   <!-- Top Toolbar -->
   <div class="toolbar">
-    <!-- Brand Emblem -->
+    <!-- Brand Logo -->
     <div class="brand-badge" onclick="window.shellApp.goHome()" title="صفحه اصلی N0PPERABO">
       <div class="brand-logo-container">
         <img src="/assets/logo.svg" alt="N0pperabo" class="toolbar-logo" />
@@ -895,40 +862,40 @@ class OfflineBrowserUI:
       <span class="brand-title">NTTM</span>
     </div>
 
-    <!-- Navigation Buttons with SVGs -->
+    <!-- Navigation Buttons -->
     <div class="nav-group">
       <button class="btn-nav" onclick="window.shellApp.goBack()" title="بازگشت (Back)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
       <button class="btn-nav" onclick="window.shellApp.goForward()" title="جلو (Forward)">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
       <button class="btn-nav" onclick="window.shellApp.reload()" title="تازه‌سازی (Reload)">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       </button>
       <button class="btn-nav" onclick="window.shellApp.goHome()" title="صفحه خانگی">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       </button>
     </div>
 
     <!-- URL Bar -->
     <div class="url-bar-container">
       <span class="url-icon">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </span>
-      <input type="text" class="url-input" id="url-input" placeholder="آدرس وب‌سایت را وارد کنید یا جستجو نمایید..." />
-      <button class="btn-go" onclick="window.shellApp.navigateFromBar()">برو</button>
+      <input type="text" class="url-input" id="url-input" placeholder="آدرس سایت یا جستجو در گوگل..." />
+      <button class="btn-white" onclick="window.shellApp.navigateFromBar()">برو</button>
     </div>
 
-    <!-- Mode & Daemon Toggles -->
+    <!-- Actions & Toggles -->
     <div class="actions-group">
-      <div class="mode-toggle" id="mode-toggle" onclick="window.shellApp.toggleMode()" title="تغییر حالت اجرای اکشن‌ها">
-        <span class="mode-dot"></span>
+      <div class="badge-toggle" id="mode-toggle" onclick="window.shellApp.toggleMode()" title="تغییر وضعیت اجرای مستقیم/دسته‌ای">
+        <span class="dot-indicator"></span>
         <span id="mode-text">مد مستقیم</span>
       </div>
 
-      <div class="daemon-btn" id="daemon-toggle" onclick="window.shellApp.toggleDaemon()" title="رانر فعال در پس‌زمینه">
-        <span class="daemon-dot"></span>
+      <div class="badge-toggle" id="daemon-toggle" onclick="window.shellApp.toggleDaemon()" title="رانر دائم در پس‌زمینه">
+        <span class="dot-indicator" style="background:#555;"></span>
         <span id="daemon-text">دیمون</span>
       </div>
 
@@ -941,18 +908,18 @@ class OfflineBrowserUI:
         </div>
       </div>
 
-      <button class="action-btn" id="btn-batch-send" style="display:none; color:var(--accent-amber); border-color:rgba(245,158,11,0.4);" onclick="window.shellApp.triggerBatch()" title="ارسال تغییرات به گیت‌هاب">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      <button class="btn-white" id="btn-batch-send" style="display:none;" onclick="window.shellApp.triggerBatch()" title="ارسال تغییرات به گیت‌هاب">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         <span>ارسال رویدادها</span>
       </button>
 
-      <button class="action-btn" id="btn-shorts-nav" style="display:none;" onclick="window.shellApp.triggerShortsNext()" title="پیمایش شورتز یوتیوب (ویدیوی بعدی)">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
+      <button class="btn-white" id="btn-shorts-nav" style="display:none;" onclick="window.shellApp.triggerShortsNext()" title="پیمایش شورتز یوتیوب (ویدیوی بعدی)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
         <span>شورتز بعدی</span>
       </button>
 
-      <button class="action-btn" onclick="window.shellApp.openSettings()" title="تنظیمات توکن و ریپازیتوری">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <button class="btn-action-dark" onclick="window.shellApp.openSettings()" title="تنظیمات توکن و ریپازیتوری">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span>تنظیمات</span>
       </button>
     </div>
@@ -960,17 +927,17 @@ class OfflineBrowserUI:
 
   <!-- Batch Queue Bar -->
   <div class="queue-bar" id="queue-bar">
-    <span style="font-size:12px; font-weight:600; color:var(--accent-amber);">صف رویدادها:</span>
+    <span style="font-size:12px; font-weight:700; color:#f59e0b;">صف رویدادها:</span>
     <div class="queue-items" id="queue-items"></div>
-    <button class="action-btn" style="color:var(--accent-rose); border-color:rgba(239,68,68,0.3);" onclick="window.shellApp.clearQueue()">پاکسازی صف</button>
+    <button class="btn-action-dark" style="color:#ef4444; border-color:#552222;" onclick="window.shellApp.clearQueue()">پاکسازی صف</button>
   </div>
 
   <!-- Main Web Content -->
   <div class="content-area">
     <iframe id="browser-frame" src="/start" sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>
     <div class="loading-overlay" id="loading-overlay">
-      <div class="cyber-spinner"></div>
-      <div class="loading-text" id="loading-text">در حال ارسال اکشن به گیت‌هاب...</div>
+      <div class="spinner-ring"></div>
+      <div class="loading-text" id="loading-text">در حال پردازش درخواست در گیت‌هاب...</div>
     </div>
   </div>
 
@@ -979,22 +946,19 @@ class OfflineBrowserUI:
     <div class="status-text" id="status-text">
       <span>آماده</span>
     </div>
-    <div id="status-details">NTTM Stealth Core v2.0</div>
+    <div>NTTM Core • Pure Black Edition</div>
   </div>
 
   <!-- Settings Modal -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal">
-      <h2>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        تنظیمات ارتباط با مخزن گیت‌هاب
-      </h2>
+      <h2>تنظیمات اتصال به ریپازیتوری گیت‌هاب</h2>
       <div class="form-group">
-        <label>توکن دسترسی شخصی (Personal Access Token - PAT):</label>
+        <label>توکن دسترسی شخصی (GitHub PAT):</label>
         <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
       </div>
       <div class="form-group">
-        <label>مخزن هدف (Target Repository):</label>
+        <label>ریپازیتوری هدف (Target Repository):</label>
         <input type="text" id="cfg-repo" placeholder="owner/repo-name" />
       </div>
       <div class="modal-actions">
@@ -1009,6 +973,7 @@ class OfflineBrowserUI:
       isBatchMode: false,
       isDaemonActive: false,
       isCustomDelayActive: false,
+      currentLiveUrl: '',
       queue: [],
 
       init: function() {
@@ -1023,8 +988,8 @@ class OfflineBrowserUI:
           try {
             const loc = frame.contentWindow.location.href;
             if (loc && !loc.includes('/start')) {
-              urlInput.value = loc;
-              this.updateShortsButton(loc);
+              urlInput.value = this.currentLiveUrl || loc;
+              this.updateShortsButton(this.currentLiveUrl || loc);
             }
           } catch(err) {}
           this.injectDeepInterceptor();
@@ -1035,7 +1000,7 @@ class OfflineBrowserUI:
         setInterval(() => {
           if (window.pywebview && window.pywebview.api) {
             window.pywebview.api.get_current_url().then(res => {
-              if (res && res.url) {
+              if (res && res.url && res.url !== 'about:blank') {
                 if (!document.activeElement || document.activeElement.id !== 'url-input') {
                   if (!res.url.includes('/start')) {
                     urlInput.value = res.url;
@@ -1048,49 +1013,38 @@ class OfflineBrowserUI:
         }, 1500);
       },
 
-      updateShortsButton: function(url) {
-        const btn = document.getElementById('btn-shorts-nav');
-        if (btn) {
-          if (url && (url.includes('/shorts/') || url.includes('/shorts'))) {
-            btn.style.display = 'flex';
-          } else {
-            btn.style.display = 'none';
-          }
+      onPageLoaded: function(localUrl, targetUrl, title) {
+        this.hideLoading();
+        this.currentLiveUrl = targetUrl || '';
+        const urlInput = document.getElementById('url-input');
+        if (targetUrl && urlInput) {
+          urlInput.value = targetUrl;
         }
-      },
-
-      triggerShortsNext: function() {
         const frame = document.getElementById('browser-frame');
-        let currentUrl = '';
-        try {
-          currentUrl = frame.contentWindow.location.href;
-        } catch(e) {}
-        if (!currentUrl && window.pywebview && window.pywebview.api) {
-          window.pywebview.api.get_current_url().then(res => {
-            if (res && res.url) this.executeShortsNext(res.url);
-          });
-          return;
+        if (frame) {
+          frame.src = localUrl;
         }
-        this.executeShortsNext(currentUrl);
+        if (title) {
+          document.title = title + ' - N0PPERABO NTTM';
+        }
+        this.updateShortsButton(targetUrl);
       },
 
-      executeShortsNext: function(currentUrl) {
-        let videoId = '';
-        const m = currentUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
-        if (m && m[1]) videoId = m[1];
-
-        this.showLoading('در حال دریافت شورتز بعدی از گیت‌هاب...');
-        if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.navigate_shorts_next(videoId).then(res => {
-            if (res && res.error) {
-              this.hideLoading();
-              alert('خطا در بارگذاری شورتز بعدی: ' + res.error);
-            }
-          }).catch(err => {
-            this.hideLoading();
-            alert('خطای سیستمی: ' + err);
-          });
+      setLoading: function(isLoading, msg) {
+        if (isLoading) {
+          this.showLoading(msg);
+        } else {
+          this.hideLoading();
         }
+      },
+
+      updateStatus: function(msg) {
+        const el = document.getElementById('status-text');
+        if (el) el.innerHTML = '<span>' + msg + '</span>';
+      },
+
+      showToast: function(msg, isError, isFile) {
+        this.updateStatus(msg);
       },
 
       showLoading: function(text) {
@@ -1118,15 +1072,11 @@ class OfflineBrowserUI:
       },
 
       navigate: function(url) {
+        const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
         this.showLoading('در حال بارگذاری صفحه از طریق رانر گیت‌هاب...');
         this.updateShortsButton(url);
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.navigate(url).then(res => {
-            if (res && res.error) {
-              this.hideLoading();
-              alert('خطا: ' + res.error);
-            }
-          });
+          window.pywebview.api.navigate(url, delay);
         } else {
           document.getElementById('browser-frame').src = url;
         }
@@ -1135,22 +1085,19 @@ class OfflineBrowserUI:
       goHome: function() {
         document.getElementById('browser-frame').src = '/start';
         document.getElementById('url-input').value = '';
+        this.currentLiveUrl = '';
         this.updateShortsButton('');
       },
 
       goBack: function() {
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.go_back();
-        } else {
-          window.history.back();
         }
       },
 
       goForward: function() {
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.go_forward();
-        } else {
-          window.history.forward();
         }
       },
 
@@ -1158,8 +1105,24 @@ class OfflineBrowserUI:
         if (window.pywebview && window.pywebview.api) {
           this.showLoading('در حال بازخوانی صفحه...');
           window.pywebview.api.reload();
-        } else {
-          document.getElementById('browser-frame').contentWindow.location.reload();
+        }
+      },
+
+      updateShortsButton: function(url) {
+        const btn = document.getElementById('btn-shorts-nav');
+        if (btn) {
+          if (url && (url.includes('/shorts/') || url.includes('/shorts'))) {
+            btn.style.display = 'flex';
+          } else {
+            btn.style.display = 'none';
+          }
+        }
+      },
+
+      triggerShortsNext: function() {
+        this.showLoading('در حال دریافت شورتز بعدی...');
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.navigate_shorts_next('');
         }
       },
 
@@ -1239,7 +1202,7 @@ class OfflineBrowserUI:
         this.queue.forEach((item, idx) => {
           const div = document.createElement('div');
           div.className = 'queue-item';
-          div.innerHTML = '<span class="type">' + item.type + '</span> <span>' + (item.selector || item.text || item.key || '') + '</span>';
+          div.innerHTML = '<span style="color:#ffffff; font-weight:700;">' + item.type + '</span> <span>' + (item.selector || item.text || item.key || '') + '</span>';
           container.appendChild(div);
         });
       },
@@ -1258,10 +1221,10 @@ class OfflineBrowserUI:
           return;
         }
         this.showLoading('در حال ارسال صف اکشن‌ها به گیت‌هاب...');
+        const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
         if (window.pywebview && window.pywebview.api) {
-          window.pywebview.api.send_batch().then(res => {
-            this.clearQueue();
-          });
+          window.pywebview.api.run_batch_actions(this.currentLiveUrl, this.queue, delay);
+          this.clearQueue();
         }
       },
 
@@ -1304,7 +1267,18 @@ class OfflineBrowserUI:
         const frame = document.getElementById('browser-frame');
         try {
           const doc = frame.contentDocument || frame.contentWindow.document;
-          if (!doc || doc._injectedNTTM) return;
+          const win = frame.contentWindow;
+          if (!doc || !win || doc._injectedNTTM) return;
+
+          try {
+            const loc = win.location;
+            if (!loc || !loc.pathname || !loc.pathname.startsWith('/cache/')) {
+              return;
+            }
+          } catch(e) {
+            return;
+          }
+
           doc._injectedNTTM = true;
 
           const script = doc.createElement('script');
@@ -1315,7 +1289,7 @@ class OfflineBrowserUI:
                 if (el.id) return '#' + el.id;
                 if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
                 if (el.className && typeof el.className === 'string') {
-                  const c = el.className.trim().split(/\s+/)[0];
+                  const c = el.className.trim().split(/\\s+/)[0];
                   if (c) return el.tagName.toLowerCase() + '.' + c;
                 }
                 return el.tagName.toLowerCase();
@@ -1370,7 +1344,7 @@ class OfflineBrowserUI:
 """
 
     def _generate_start_page_html(self) -> str:
-        """Generates clean, Anti-Slop compliant start page adhering to DESIGN.md."""
+        """Generates pure black start page with huge white N0pperabo logo and white buttons."""
         token = getattr(self.config, "github_token", "")
         token_status = "ثبت شده" if token else "تنظیم نشده"
         repo_status = getattr(self.config, "github_repo", "") or "تنظیم نشده"
@@ -1385,18 +1359,14 @@ class OfflineBrowserUI:
   <title>N0PPERABO - NTTM Home</title>
   <style>
     :root {{
-      --bg-base: #090b10;
-      --bg-surface: #11141c;
-      --bg-surface-elevated: #161b26;
-      --border-subtle: #232a3b;
-      --border-focus: #3b82f6;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
+      --bg-base: #000000;
+      --bg-surface: #0a0a0a;
+      --bg-surface-elevated: #141414;
+      --border-subtle: #262626;
+      --border-focus: #ffffff;
+      --text: #ffffff;
+      --text-muted: #a3a3a3;
+      --text-dim: #737373;
     }}
     * {{
       box-sizing: border-box;
@@ -1405,8 +1375,8 @@ class OfflineBrowserUI:
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
     }}
     body {{
-      background: var(--bg-base);
-      color: var(--text);
+      background: #000000;
+      color: #ffffff;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -1416,64 +1386,67 @@ class OfflineBrowserUI:
     }}
 
     .container {{
-      max-width: 680px;
+      max-width: 720px;
       width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 28px;
+      gap: 32px;
     }}
 
-    /* Hero Branding */
+    /* Huge Hero Branding */
     .hero {{
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
       text-align: center;
     }}
     .hero-logo-box {{
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
+      padding: 10px;
+      width: 100%;
     }}
     .hero-logo {{
-      width: 110px;
+      width: 340px;
+      max-width: 85vw;
       height: auto;
       object-fit: contain;
+      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
     }}
     .hero h1 {{
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      color: var(--text);
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #ffffff;
     }}
     .hero p {{
       color: var(--text-muted);
-      font-size: 13.5px;
-      line-height: 1.5;
+      font-size: 14px;
+      line-height: 1.6;
     }}
 
     /* Search Box */
     .search-box {{
       width: 100%;
       display: flex;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      padding: 3px;
+      background: #0a0a0a;
+      border: 1px solid #333333;
+      border-radius: 8px;
+      padding: 4px;
       transition: border-color 0.15s ease;
     }}
     .search-box:focus-within {{
-      border-color: var(--border-focus);
+      border-color: #ffffff;
     }}
     .search-input-wrapper {{
       flex: 1;
       display: flex;
       align-items: center;
-      padding: 0 12px;
-      gap: 8px;
+      padding: 0 14px;
+      gap: 10px;
     }}
     .search-icon {{
       color: var(--text-dim);
@@ -1484,27 +1457,27 @@ class OfflineBrowserUI:
       flex: 1;
       background: transparent;
       border: none;
-      color: var(--text);
-      font-size: 13.5px;
-      padding: 9px 0;
+      color: #ffffff;
+      font-size: 14px;
+      padding: 10px 0;
       outline: none;
     }}
     .search-box input::placeholder {{
       color: var(--text-dim);
     }}
     .btn-search {{
-      background: var(--primary);
+      background: #ffffff;
       border: none;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 0 18px;
-      border-radius: 4px;
+      color: #000000;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 0 24px;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
     }}
     .btn-search:hover {{
-      background: var(--primary-hover);
+      background: #e5e5e5;
     }}
 
     /* Quick Grid */
@@ -1512,13 +1485,13 @@ class OfflineBrowserUI:
       width: 100%;
       display: grid;
       grid-template-columns: repeat(6, 1fr);
-      gap: 8px;
+      gap: 10px;
     }}
     .quick-card {{
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      padding: 12px 6px;
+      background: #0a0a0a;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      padding: 14px 8px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1526,30 +1499,31 @@ class OfflineBrowserUI:
       cursor: pointer;
       transition: all 0.15s ease;
       text-decoration: none;
-      color: var(--text);
+      color: #ffffff;
     }}
     .quick-card:hover {{
-      background: var(--bg-surface-elevated);
-      border-color: var(--text-dim);
+      background: #ffffff;
+      border-color: #ffffff;
+      color: #000000;
     }}
     .quick-icon-svg {{
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--text-muted);
+      color: #ffffff;
     }}
     .quick-card:hover .quick-icon-svg {{
-      color: var(--text);
+      color: #000000;
     }}
     .quick-name {{
-      font-size: 11.5px;
-      font-weight: 500;
+      font-size: 12px;
+      font-weight: 600;
       color: var(--text-muted);
     }}
     .quick-card:hover .quick-name {{
-      color: var(--text);
+      color: #000000;
     }}
 
     /* Info Grid */
@@ -1557,24 +1531,21 @@ class OfflineBrowserUI:
       width: 100%;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 14px;
     }}
     .info-card {{
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 6px;
-      padding: 16px;
-      font-size: 12px;
+      background: #0a0a0a;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      padding: 18px;
+      font-size: 12.5px;
       line-height: 1.6;
     }}
     .info-card h3 {{
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #ffffff;
       margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }}
     .info-card p {{
       color: var(--text-muted);
@@ -1585,93 +1556,93 @@ class OfflineBrowserUI:
     }}
     .badge {{
       display: inline-block;
-      padding: 2px 7px;
+      padding: 2px 8px;
       border-radius: 4px;
       font-size: 11px;
       font-family: ui-monospace, monospace;
-      font-weight: 600;
+      font-weight: 700;
     }}
     .badge-ok {{
-      background: rgba(16, 185, 129, 0.12);
-      color: var(--accent-emerald);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: #141414;
+      color: #ffffff;
+      border: 1px solid #444444;
     }}
     .cfg-link {{
-      color: var(--primary);
+      color: #ffffff;
       cursor: pointer;
       text-decoration: underline;
-      font-weight: 500;
+      font-weight: 600;
     }}
     .cfg-link:hover {{
-      color: var(--primary-hover);
+      color: #a3a3a3;
     }}
 
     .footer {{
-      font-size: 11px;
+      font-size: 11.5px;
       color: var(--text-dim);
       font-family: ui-monospace, monospace;
-      letter-spacing: 0.5px;
-      margin-top: 8px;
+      letter-spacing: 1px;
+      margin-top: 10px;
     }}
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Hero Branding -->
+    <!-- Huge Hero Branding -->
     <div class="hero">
       <div class="hero-logo-box">
         <img src="/assets/logo.svg" alt="N0pperabo Logo" class="hero-logo" />
       </div>
       <h1>N0PPERABO</h1>
-      <p>مرورگر غیرمستقیم NTTM با تانل رانر گیت‌هاب و موتور Stealth</p>
+      <p>مرورگر آفلاین NTTM بر بستر تانل گیت‌هاب رانر با مخفی‌کاری پیشرفته</p>
     </div>
 
     <!-- Search Input Bar -->
     <div class="search-box">
       <div class="search-input-wrapper">
         <span class="search-icon">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </span>
         <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن آدرس وب‌سایت..." onkeydown="if(event.key==='Enter') doSearch()" />
       </div>
       <button class="btn-search" onclick="doSearch()">جستجو</button>
     </div>
 
-    <!-- Quick Access Grid with SVGs -->
+    <!-- Quick Access Grid -->
     <div class="quick-grid">
       <div class="quick-card" onclick="quickNav('https://www.google.com')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
         </div>
         <span class="quick-name">Google</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://duckduckgo.com')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
         </div>
         <span class="quick-name">DuckDuckGo</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://www.youtube.com')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
         <span class="quick-name">YouTube</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://fa.wikipedia.org')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         </div>
         <span class="quick-name">Wikipedia</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://github.com/explore')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
         </div>
         <span class="quick-name">GitHub</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://stackoverflow.com')">
         <div class="quick-icon-svg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
         </div>
         <span class="quick-name">Stack Overflow</span>
       </div>
@@ -1681,21 +1652,21 @@ class OfflineBrowserUI:
     <div class="info-grid">
       <div class="info-card">
         <h3>راهنمای حالت‌های کارکرد</h3>
-        <p><strong>حالت مستقیم (Direct):</strong> کلیک‌ها و ارسال فرم‌ها بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
-        <p><strong>حالت دسته‌ای (Batch):</strong> مناسب برای فرم‌های چندمرحله‌ای و لاگین. اقدامات پشت‌سرهم ثبت شده و در یک رانر گیت‌هاب اجرا می‌شوند.</p>
+        <p><strong>حالت مستقیم:</strong> کلیک‌ها و ارسال فرم‌ها بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
+        <p><strong>حالت دسته‌ای:</strong> اقدامات پشت‌سرهم در صف ثبت شده و همه با هم در یک رانر گیت‌هاب اجرا می‌شوند.</p>
       </div>
 
       <div class="info-card">
-        <h3>وضعیت اتصال مخزن</h3>
+        <h3>وضعیت ارتباط با مخزن</h3>
         <p style="margin-bottom: 6px;"><strong>توکن دسترسی:</strong> <span class="badge badge-ok">{token_status}</span></p>
-        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:var(--text-muted); font-family: ui-monospace, monospace;">{repo_status}</span></p>
+        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#ffffff; font-family: ui-monospace, monospace;">{repo_status}</span></p>
         <p style="margin-bottom: 10px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
         <p><a class="cfg-link" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات و کلیدهای ارتباطی</a></p>
       </div>
     </div>
 
     <div class="footer">
-      N0PPERABO NTTM CORE • POWERED BY GITHUB RUNNERS
+      N0PPERABO NTTM ENGINE • PURE BLACK STEALTH
     </div>
   </div>
 
