@@ -872,6 +872,26 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
       });
 
       // 6. RESOLVE LINKS AND FORMS TO ABSOLUTE URLS
+      // Fix YouTube guide entries and SPA custom elements lacking static href
+      document.querySelectorAll('ytd-guide-entry-renderer, ytd-mini-guide-entry-renderer').forEach((entry) => {
+        try {
+          const a = entry.querySelector('a#endpoint') || entry.querySelector('a');
+          if (a && (!a.getAttribute('href') || a.getAttribute('href') === '#' || a.getAttribute('href').startsWith('javascript:'))) {
+            const endpointUrl = entry.__data?.data?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+              || entry.data?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url;
+            if (endpointUrl) {
+              const abs = new URL(endpointUrl, base).href;
+              a.setAttribute('href', abs);
+            } else {
+              const text = (a.getAttribute('title') || a.getAttribute('aria-label') || entry.innerText || '').toLowerCase();
+              if (text.includes('short') || text.includes('کوته') || text.includes('شورت')) {
+                a.setAttribute('href', new URL('/shorts', base).href);
+              }
+            }
+          }
+        } catch (e) {}
+      });
+
       document.querySelectorAll('a').forEach((a) => {
         try {
           if (a.href) a.setAttribute('href', a.href);

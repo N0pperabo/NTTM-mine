@@ -1067,9 +1067,16 @@ class OfflineBrowserUI:
           // Helper: Unique Descriptor Builder
           function buildDescriptor(el) {
             let selector = '';
-            if (el.id) {
+            const title = el.getAttribute ? el.getAttribute('title') : null;
+            const ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
+
+            if (title) {
+              selector = `${el.tagName.toLowerCase()}[title="${title.replace(/"/g, '\\\"')}"]`;
+            } else if (ariaLabel) {
+              selector = `${el.tagName.toLowerCase()}[aria-label="${ariaLabel.replace(/"/g, '\\\"')}"]`;
+            } else if (el.id && el.id !== 'endpoint' && !el.id.startsWith('__')) {
               selector = '#' + el.id;
-            } else if (el.getAttribute('name')) {
+            } else if (el.getAttribute && el.getAttribute('name')) {
               selector = `${el.tagName.toLowerCase()}[name="${el.getAttribute('name')}"]`;
             } else if (el.className && typeof el.className === 'string') {
               const cls = el.className.trim().split(/\\s+/)[0];
@@ -1081,11 +1088,15 @@ class OfflineBrowserUI:
 
             // Simple XPath
             let xpath = '//' + el.tagName.toLowerCase();
-            if (el.id) {
+            if (title) {
+              xpath += `[@title='${title.replace(/'/g, "\\\\'")}']`;
+            } else if (ariaLabel) {
+              xpath += `[@aria-label='${ariaLabel.replace(/'/g, "\\\\'")}']`;
+            } else if (el.id && el.id !== 'endpoint' && !el.id.startsWith('__')) {
               xpath += `[@id='${el.id}']`;
             }
 
-            const textHint = (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || '').trim().slice(0, 50);
+            const textHint = (el.innerText || el.value || el.placeholder || ariaLabel || title || '').trim().slice(0, 50);
             const rect = el.getBoundingClientRect();
             const x = Math.round(rect.left + rect.width / 2);
             const y = Math.round(rect.top + rect.height / 2);
@@ -1135,7 +1146,10 @@ class OfflineBrowserUI:
           // 2. Link & Click Interception (Capture phase)
           doc.addEventListener('click', (e) => {
             const link = e.target.closest('a');
-            if (link && link.href) {
+            const hrefAttr = link ? link.getAttribute('href') : null;
+            const hasRealHref = hrefAttr && hrefAttr !== '#' && !hrefAttr.startsWith('javascript:');
+
+            if (link && hasRealHref) {
               e.preventDefault();
               e.stopPropagation();
               const fullUrl = link.href;
@@ -1150,12 +1164,24 @@ class OfflineBrowserUI:
               return;
             }
 
-            // Clickable buttons or SPA triggers
-            const btn = e.target.closest('button, [role="button"], input[type="submit"], input[type="button"], summary');
-            if (btn) {
+            // Clickable buttons, SPA triggers, custom elements, tabs, menus, or links without static href
+            const clickable = e.target.closest(
+              'button, [role="button"], [role="tab"], [role="menuitem"], [role="link"], input[type="submit"], input[type="button"], summary, [onclick], ytd-guide-entry-renderer, ytd-mini-guide-entry-renderer, yt-icon-button, tp-yt-paper-item, a'
+            );
+            if (clickable) {
               e.preventDefault();
               e.stopPropagation();
-              const desc = buildDescriptor(btn);
+
+              // Special SPA heuristic: Check if it is YouTube Shorts or similar known SPA route
+              const t = (clickable.getAttribute('title') || clickable.getAttribute('aria-label') || clickable.innerText || '').toLowerCase();
+              if (window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('youtube.com')) {
+                if (t.includes('short') || t.includes('کوته‌ویدیو') || t.includes('شورت')) {
+                  window.pywebview.api.navigate('https://www.youtube.com/shorts', window.shellApp.getDelaySeconds());
+                  return;
+                }
+              }
+
+              const desc = buildDescriptor(clickable);
               desc.type = 'click';
 
               if (window.shellApp.isBatchMode) {
