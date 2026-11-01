@@ -121,7 +121,7 @@ class GitHubTransport:
             update_status(f"ایجاد پاکت درخواست با شناسه: {request_id}")
 
         # 2. Prepare envelope
-        storage_state, session_storage = self.session_manager.get_envelope_state()
+        storage_state, session_storage = self.session_manager.get_envelope_state(target_url=final_target_url)
 
         envelope = {
             "request_id": request_id,
@@ -357,13 +357,28 @@ class GitHubTransport:
             "branch": self.config.branch or "main",
         }
 
-        try:
-            resp = requests.put(url, headers=self._get_headers(), json=payload, timeout=20)
-            if resp.status_code in (200, 201):
-                return True, ""
-            return False, f"HTTP {resp.status_code}: {resp.text}"
-        except Exception as e:
-            return False, str(e)
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.put(
+                    url, headers=self._get_headers(), json=payload, timeout=(15, 60)
+                )
+                if resp.status_code in (200, 201):
+                    return True, ""
+                if attempt == max_retries:
+                    return False, f"HTTP {resp.status_code}: {resp.text}"
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.SSLError,
+                requests.exceptions.ConnectionError,
+            ) as e:
+                logger.warning(f"Upload request attempt {attempt}/{max_retries} failed: {e}")
+                if attempt == max_retries:
+                    return False, f"خطای شبکه/تایم‌اوت در ارسال به گیت‌هاب: {str(e)}"
+                time.sleep(1)
+            except Exception as e:
+                return False, str(e)
+        return False, "Failed to upload request after retries" 
 
     def _trigger_workflow(self, request_id: str) -> Tuple[bool, str]:
         """Dispatches fetcher.yml via POST /repos/{owner}/{repo}/actions/workflows/..."""
@@ -376,7 +391,7 @@ class GitHubTransport:
         }
 
         try:
-            resp = requests.post(url, headers=self._get_headers(), json=payload, timeout=20)
+            resp = requests.post(url, headers=self._get_headers(), json=payload, timeout=(15, 30))
             if resp.status_code in (200, 204):
                 return True, ""
             return False, f"HTTP {resp.status_code}: {resp.text}"

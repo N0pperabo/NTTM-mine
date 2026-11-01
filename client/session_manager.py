@@ -1,5 +1,6 @@
 import json
 import logging
+import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -66,16 +67,63 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to save session state: {e}")
 
-    def get_envelope_state(self) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
+    def get_envelope_state(
+        self, target_url: Optional[str] = None
+    ) -> Tuple[Dict[str, Any], Dict[str, Dict[str, Any]]]:
         """
         Returns (storage_state, session_storage) ready to be embedded into
         requests/<request_id>.json envelope.
+        Filters origins (localStorage) and session_storage to only include relevant
+        domains for target_url, and caps/drops oversized cache entries (>16KB)
+        to prevent upload timeouts over throttled networks.
         """
+        MAX_ITEM_LEN = 16384  # 16 KB max per localStorage item
+
+        target_domain = ""
+        if target_url:
+            try:
+                parsed = urllib.parse.urlparse(target_url)
+                target_domain = (parsed.netloc or parsed.path).split(":")[0].lower().lstrip("www.")
+            except Exception:
+                target_domain = ""
+
+        filtered_origins = []
+        for o in self.origins:
+            orig = o.get("origin", "")
+            # Check domain match if target_domain is known
+            if target_domain:
+                try:
+                    orig_host = urllib.parse.urlparse(orig).netloc.split(":")[0].lower().lstrip("www.")
+                    if orig_host and (target_domain not in orig_host and orig_host not in target_domain):
+                        continue
+                except Exception:
+                    pass
+
+            # Filter out oversized items (like MediaWikiModuleStore)
+            valid_items = [
+                item for item in o.get("localStorage", [])
+                if len(str(item.get("value", ""))) <= MAX_ITEM_LEN
+            ]
+            if valid_items:
+                filtered_origins.append({"origin": orig, "localStorage": valid_items})
+
+        # Filter session_storage
+        filtered_session_storage = {}
+        for orig, items in self.session_storage.items():
+            if target_domain:
+                try:
+                    orig_host = urllib.parse.urlparse(orig).netloc.split(":")[0].lower().lstrip("www.")
+                    if orig_host and (target_domain not in orig_host and orig_host not in target_domain):
+                        continue
+                except Exception:
+                    pass
+            filtered_session_storage[orig] = items
+
         storage_state = {
             "cookies": self.cookies,
-            "origins": self.origins,
+            "origins": filtered_origins,
         }
-        return storage_state, self.session_storage
+        return storage_state, filtered_session_storage
 
     def update_from_remote(self, storage_state_input: Any) -> None:
         """
@@ -109,7 +157,8 @@ class SessionManager:
             cookie_map[key] = rc
         self.cookies = list(cookie_map.values())
 
-        # 2. Merge origins (localStorage)
+        # 2. Merge origins (localStorage) - skip oversized cache/module blobs
+        MAX_ITEM_LEN = 16384
         remote_origins = data.get("origins", [])
         origins_map = {o.get("origin"): o.get("localStorage", []) for o in self.origins}
         for ro in remote_origins:
@@ -117,14 +166,20 @@ class SessionManager:
             if not orig:
                 continue
             curr_items = origins_map.get(orig, [])
-            item_map = {item.get("name"): item.get("value") for item in curr_items}
+            item_map = {
+                item.get("name"): item.get("value")
+                for item in curr_items
+                if len(str(item.get("value", ""))) <= MAX_ITEM_LEN
+            }
             for new_item in ro.get("localStorage", []):
-                item_map[new_item.get("name")] = new_item.get("value")
+                val_str = str(new_item.get("value", ""))
+                if len(val_str) <= MAX_ITEM_LEN:
+                    item_map[new_item.get("name")] = new_item.get("value")
             origins_map[orig] = [
                 {"name": k, "value": v} for k, v in item_map.items()
             ]
 
-        self.origins = [{"origin": k, "localStorage": v} for k, v in origins_map.items()]
+        self.origins = [{"origin": k, "localStorage": v} for k, v in origins_map.items() if v]
 
         self.save_session()
         logger.info(
