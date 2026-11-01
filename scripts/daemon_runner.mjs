@@ -973,10 +973,17 @@ async function packageAndRelease(requestId, workDir) {
   // Clean up old releases
   await autoJanitorCleanupReleases(GITHUB_TOKEN, GITHUB_REPOSITORY).catch(() => {});
 
-  // Cleanup local zip and parts
-  if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
-  partFiles.forEach((p) => fs.unlinkSync(path.join(cwd, p)));
-  if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
+  // Cleanup local zip and parts safely
+  try {
+    if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
+    parts.forEach((p) => {
+      const fp = path.join(cwd, p.filename);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    });
+    if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
+  } catch (cleanErr) {
+    console.warn('[Daemon] Cleanup warning:', cleanErr.message);
+  }
 }
 
 async function resolveElement(page, action) {

@@ -247,9 +247,25 @@ class GitHubTransport:
                 )
 
             manifest_path = cache_req_dir / "manifest.json"
-            self._download_file_resumable(
-                manifest_asset, manifest_path, update_status, "manifest.json"
-            )
+            try:
+                self._download_file_resumable(
+                    manifest_asset, manifest_path, update_status, "manifest.json"
+                )
+            except Exception as mf_err:
+                tag = release_data.get("tag_name", f"res-{request_id}")
+                fresh_rel = self._fetch_release_by_tag(tag)
+                if fresh_rel:
+                    fresh_mf = self._find_asset(fresh_rel, "manifest.json")
+                    if fresh_mf:
+                        release_data = fresh_rel
+                        manifest_asset = fresh_mf
+                        self._download_file_resumable(
+                            manifest_asset, manifest_path, update_status, "manifest.json"
+                        )
+                    else:
+                        raise mf_err
+                else:
+                    raise mf_err
 
             with open(manifest_path, "r", encoding="utf-8") as f:
                 manifest = json.load(f)
@@ -575,6 +591,20 @@ class GitHubTransport:
                 return asset
         return None
 
+    def _fetch_release_by_tag(self, tag: str) -> Optional[dict]:
+        """Fetches fresh release metadata from GitHub API by tag."""
+        if not tag:
+            return None
+        owner, repo = self._parse_repo()
+        url = f"{self.api_base}/repos/{owner}/{repo}/releases/tags/{tag}"
+        try:
+            resp = requests.get(url, headers=self._get_headers(), timeout=15)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as e:
+            logger.debug(f"Fetch release by tag {tag} failed: {e}")
+        return None
+
     def _download_chunks_parallel(
         self,
         release_data: dict,
@@ -591,6 +621,7 @@ class GitHubTransport:
         if not parts:
             raise ValueError("مانیفست فاقد قطعات فشرده است.")
 
+        tag = release_data.get("tag_name", "")
         part_assets = {}
         for part_info in parts:
             part_name = part_info["filename"]
@@ -621,6 +652,7 @@ class GitHubTransport:
                 status_cb=update_status,
                 label=part_name,
                 progress_hook=on_bytes,
+                tag=tag,
             )
             tracker.on_complete(part_name)
             return part_name, part_dest
@@ -652,13 +684,14 @@ class GitHubTransport:
         label: str = "",
         max_retries: int = 5,
         progress_hook: Optional[Callable[[int], None]] = None,
+        tag: str = "",
     ) -> None:
         """Downloads a single release asset with optional retry, resume and SHA-256 verification."""
         cb = status_cb or (lambda msg: None)
         lbl = label or asset.get("name", "asset")
         if expected_sha:
             self._download_chunk_with_retry(
-                asset, dest_path, expected_sha, cb, lbl, max_retries=max_retries, progress_hook=progress_hook
+                asset, dest_path, expected_sha, cb, lbl, max_retries=max_retries, progress_hook=progress_hook, tag=tag
             )
         else:
             self._download_file_resumable(asset, dest_path, cb, lbl, progress_hook=progress_hook)
@@ -672,11 +705,19 @@ class GitHubTransport:
         label: str,
         max_retries: int = 5,
         progress_hook: Optional[Callable[[int], None]] = None,
+        tag: str = "",
     ) -> None:
-        """Downloads a chunk with HTTP Range Resume and SHA-256 verification up to 5 retries."""
+        """Downloads a chunk with HTTP Range Resume, fresh asset refresh on retry, and SHA-256 verification up to 5 retries."""
+        current_asset = asset
         for attempt in range(1, max_retries + 1):
             try:
-                self._download_file_resumable(asset, dest_path, status_cb, label, progress_hook=progress_hook)
+                if attempt > 1 and tag:
+                    fresh_release = self._fetch_release_by_tag(tag)
+                    if fresh_release:
+                        fresh_asset = self._find_asset(fresh_release, label)
+                        if fresh_asset:
+                            current_asset = fresh_asset
+                self._download_file_resumable(current_asset, dest_path, status_cb, label, progress_hook=progress_hook)
                 actual_sha = self._compute_sha256(dest_path)
                 if actual_sha.lower() == expected_sha.lower():
                     return  # Match!
@@ -702,7 +743,7 @@ class GitHubTransport:
         label: str,
         progress_hook: Optional[Callable[[int], None]] = None,
     ) -> None:
-        """Performs resumable download of an asset with Range header."""
+        """Performs resumable download of an asset with Range header and browser_download_url fallback."""
         asset_url = asset.get("url")
         browser_url = asset.get("browser_download_url")
 
@@ -722,26 +763,45 @@ class GitHubTransport:
         # Prefer asset_url with octet-stream for private/authenticated repos
         download_target = asset_url or browser_url
 
-        with requests.get(
-            download_target, headers=headers, stream=True, timeout=30, allow_redirects=True
-        ) as resp:
+        resp = None
+        try:
+            resp = requests.get(
+                download_target, headers=headers, stream=True, timeout=30, allow_redirects=True
+            )
             resp.raise_for_status()
+        except requests.HTTPError as http_err:
+            # Fallback to browser_download_url if asset_url returned 404 (e.g. rotated asset ID)
+            if (resp is None or resp.status_code == 404) and browser_url and browser_url != download_target:
+                logger.warning(
+                    f"Asset URL {download_target} returned 404 for {label}. Falling back to browser_download_url: {browser_url}"
+                )
+                alt_headers = {}
+                if self.config.github_token:
+                    alt_headers["Authorization"] = f"Bearer {self.config.github_token.strip()}"
+                if existing_size > 0:
+                    alt_headers["Range"] = f"bytes={existing_size}-"
+                resp = requests.get(
+                    browser_url, headers=alt_headers, stream=True, timeout=30, allow_redirects=True
+                )
+                resp.raise_for_status()
+            else:
+                raise http_err
 
-            is_partial = resp.status_code == 206
-            mode = "ab" if (is_partial and existing_size > 0) else "wb"
-            downloaded = existing_size if is_partial else 0
+        is_partial = resp.status_code == 206
+        mode = "ab" if (is_partial and existing_size > 0) else "wb"
+        downloaded = existing_size if is_partial else 0
 
-            with open(dest_path, mode) as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 1024):  # 1MB buffer
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if progress_hook:
-                            progress_hook(downloaded)
-                        elif total_size > 0:
-                            pct = min(100, int((downloaded / total_size) * 100))
-                            if downloaded % (5 * 1024 * 1024) == 0:  # Report every 5MB
-                                status_cb(f"دانلود {label}: {pct}%")
+        with open(dest_path, mode) as f:
+            for chunk in resp.iter_content(chunk_size=1024 * 1024):  # 1MB buffer
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_hook:
+                        progress_hook(downloaded)
+                    elif total_size > 0:
+                        pct = min(100, int((downloaded / total_size) * 100))
+                        if downloaded % (5 * 1024 * 1024) == 0:  # Report every 5MB
+                            status_cb(f"دانلود {label}: {pct}%")
 
     def _assemble_chunks(self, part_paths: List[Path], output_path: Path) -> None:
         """Concatenates parts in order into single zip archive."""
