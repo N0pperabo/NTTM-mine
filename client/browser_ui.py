@@ -374,8 +374,8 @@ class OfflineBrowserUI:
         self._call_js("window.shellApp.onPageLoaded('/start', '', 'صفحه شروع آفلاین')")
 
     # ---------------- HTML UI Templates ----------------
-
     def _generate_shell_html(self) -> str:
+        """Generates the top-level browser shell with modern Anti-Slop compliant UI."""
         return """<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -384,25 +384,20 @@ class OfflineBrowserUI:
   <title>N0PPERABO - مرورگر آفلاین NTTM</title>
   <style>
     :root {
-      --bg-base: #06070a;
-      --bg-surface: #0a0d14;
-      --bg-surface-elevated: #111622;
-      --bg-glass: rgba(10, 13, 20, 0.85);
-      --bg-glass-card: rgba(17, 22, 34, 0.65);
-      --primary: #6366f1;
-      --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-      --accent-cyan: #00f2fe;
-      --accent-purple: #8b5cf6;
+      --bg-base: #090b10;
+      --bg-surface: #11141c;
+      --bg-surface-elevated: #161b26;
+      --border-subtle: #232a3b;
+      --border-focus: #3b82f6;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
       --accent-emerald: #10b981;
       --accent-amber: #f59e0b;
-      --accent-rose: #f43f5e;
+      --accent-rose: #ef4444;
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --text-dim: #64748b;
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-hover: rgba(0, 242, 254, 0.45);
-      --border-glow: 0 0 16px rgba(0, 242, 254, 0.25);
-      --toolbar-height: 64px;
+      --toolbar-height: 56px;
     }
     * {
       box-sizing: border-box;
@@ -423,16 +418,13 @@ class OfflineBrowserUI:
     /* Top Toolbar */
     .toolbar {
       height: var(--toolbar-height);
-      background: var(--bg-glass);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      background: var(--bg-surface);
       border-bottom: 1px solid var(--border-subtle);
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 0 16px;
+      padding: 0 14px;
       z-index: 100;
-      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
     }
 
     /* Brand Logo & Name */
@@ -440,75 +432,63 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 4px 10px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
+      padding: 4px 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
       cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: background 0.15s ease, border-color 0.15s ease;
       flex-shrink: 0;
     }
     .brand-badge:hover {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 18px rgba(0, 242, 254, 0.25);
-      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--border-subtle);
     }
     .brand-logo-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 26px;
+      height: 24px;
     }
     .toolbar-logo {
-      height: 24px;
+      height: 22px;
       width: auto;
       object-fit: contain;
-      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
-      transition: filter 0.3s;
-    }
-    .brand-badge:hover .toolbar-logo {
-      filter: drop-shadow(0 0 8px rgba(0, 242, 254, 0.85));
     }
     .brand-title {
       font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 1.2px;
-      background: linear-gradient(135deg, #ffffff 40%, #00f2fe 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text);
     }
 
     /* Navigation Group */
     .nav-group, .actions-group {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       flex-shrink: 0;
     }
     .btn-nav {
-      background: rgba(255, 255, 255, 0.03);
+      background: transparent;
       border: 1px solid var(--border-subtle);
-      color: var(--text);
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
+      color: var(--text-muted);
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.15s ease;
     }
     .btn-nav:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
-      transform: translateY(-1px);
-      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--text-muted);
+      color: var(--text);
     }
     .btn-nav:active {
-      transform: scale(0.95);
+      background: rgba(255, 255, 255, 0.08);
     }
 
     /* Address Bar */
@@ -516,60 +496,58 @@ class OfflineBrowserUI:
       flex: 1;
       display: flex;
       align-items: center;
-      background: rgba(5, 7, 12, 0.9);
+      background: var(--bg-base);
       border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 4px 12px;
+      border-radius: 6px;
+      padding: 2px 10px;
       gap: 8px;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      min-width: 200px;
+      transition: border-color 0.15s ease;
+      min-width: 180px;
     }
     .url-bar-container:focus-within {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 25px rgba(0, 242, 254, 0.25), inset 0 0 8px rgba(0, 242, 254, 0.05);
-      background: rgba(8, 11, 18, 0.95);
+      border-color: var(--border-focus);
     }
     .url-icon {
-      font-size: 14px;
-      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      color: var(--text-dim);
     }
     .url-input {
       flex: 1;
       background: transparent;
       border: none;
       color: var(--text);
-      font-size: 13.5px;
+      font-size: 13px;
+      font-family: ui-monospace, 'SF Mono', 'Segoe UI Mono', monospace;
       outline: none;
       direction: ltr;
       text-align: left;
-      padding: 6px 4px;
+      padding: 6px 2px;
       user-select: text;
     }
     .url-input::placeholder {
       color: var(--text-dim);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
       direction: rtl;
       text-align: right;
     }
     .btn-go {
-      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-      color: #030712;
+      background: var(--primary);
+      color: #ffffff;
       border: none;
-      padding: 7px 16px;
-      border-radius: 8px;
+      padding: 5px 14px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 13px;
-      font-weight: 700;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 2px 10px rgba(0, 242, 254, 0.3);
+      font-size: 12.5px;
+      font-weight: 600;
+      transition: background 0.15s ease;
       flex-shrink: 0;
     }
     .btn-go:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 18px rgba(0, 242, 254, 0.5);
-      filter: brightness(1.1);
+      background: var(--primary-hover);
     }
     .btn-go:active {
-      transform: scale(0.96);
+      transform: translateY(1px);
     }
 
     /* Mode Toggle */
@@ -577,31 +555,30 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 7px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px 12px;
-      border-radius: 10px;
+      background: transparent;
+      padding: 5px 10px;
+      border-radius: 6px;
       border: 1px solid var(--border-subtle);
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
       user-select: none;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.15s ease;
       flex-shrink: 0;
     }
     .mode-toggle:hover {
-      background: rgba(255, 255, 255, 0.07);
-      border-color: rgba(255, 255, 255, 0.2);
-      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
     }
     .mode-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: var(--accent-emerald);
-      box-shadow: 0 0 8px var(--accent-emerald);
     }
     .mode-toggle.batch .mode-dot {
       background: var(--accent-amber);
-      box-shadow: 0 0 8px var(--accent-amber);
     }
 
     /* Daemon Fast Mode Toggle */
@@ -609,43 +586,36 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 7px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px 12px;
-      border-radius: 10px;
+      background: transparent;
+      padding: 5px 10px;
+      border-radius: 6px;
       border: 1px solid var(--border-subtle);
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
       user-select: none;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.15s ease;
       flex-shrink: 0;
     }
     .daemon-btn:hover {
-      background: rgba(255, 255, 255, 0.07);
-      border-color: rgba(255, 255, 255, 0.2);
-      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
     }
     .daemon-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: #64748b;
-      transition: all 0.3s;
+      background: var(--text-dim);
+      transition: background 0.15s ease;
     }
     .daemon-btn.active {
-      background: rgba(16, 185, 129, 0.12);
-      border-color: rgba(16, 185, 129, 0.5);
+      border-color: rgba(16, 185, 129, 0.4);
       color: #34d399;
-      box-shadow: 0 0 16px rgba(16, 185, 129, 0.25);
+      background: rgba(16, 185, 129, 0.08);
     }
     .daemon-btn.active .daemon-dot {
       background: var(--accent-emerald);
-      box-shadow: 0 0 10px #10b981;
-      animation: radarPulse 1.8s infinite;
-    }
-    @keyframes radarPulse {
-      0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
 
     /* Custom Delay Controls */
@@ -653,32 +623,28 @@ class OfflineBrowserUI:
       display: flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px 10px;
-      border-radius: 10px;
+      background: transparent;
+      padding: 4px 8px;
+      border-radius: 6px;
       border: 1px solid var(--border-subtle);
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.15s ease;
       flex-shrink: 0;
     }
     .delay-container:hover {
-      background: rgba(255, 255, 255, 0.07);
-      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.04);
     }
     .delay-container.active {
       border-color: rgba(245, 158, 11, 0.5);
-      background: rgba(245, 158, 11, 0.12);
-      color: #fbbf24;
-      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+      background: rgba(245, 158, 11, 0.08);
     }
     .delay-btn {
       display: flex;
       align-items: center;
       gap: 5px;
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 12px;
       user-select: none;
       color: var(--text-muted);
-      transition: color 0.2s;
     }
     .delay-container.active .delay-btn {
       color: #fbbf24;
@@ -693,850 +659,742 @@ class OfflineBrowserUI:
       margin-right: 2px;
     }
     .delay-input-box input {
-      width: 44px;
-      background: rgba(6, 8, 13, 0.9);
-      border: 1px solid #475569;
+      width: 40px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
       color: #fbbf24;
       padding: 2px 4px;
-      border-radius: 6px;
+      border-radius: 4px;
       font-size: 12px;
-      font-weight: bold;
+      font-family: ui-monospace, monospace;
+      font-weight: 600;
       text-align: center;
       outline: none;
       direction: ltr;
     }
+    .delay-input-box input:focus {
+      border-color: #fbbf24;
+    }
 
     /* Action Buttons */
     .action-btn {
-      background: rgba(255, 255, 255, 0.03);
+      background: transparent;
       border: 1px solid var(--border-subtle);
       color: var(--text);
-      padding: 6px 12px;
-      border-radius: 10px;
+      padding: 5px 10px;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 12px;
       display: flex;
       align-items: center;
-      gap: 5px;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      gap: 6px;
+      transition: all 0.15s ease;
       flex-shrink: 0;
     }
     .action-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.25);
-      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--text-muted);
     }
     .action-btn:active {
-      transform: scale(0.96);
+      background: rgba(255, 255, 255, 0.08);
     }
 
     /* Batch Queue Bar */
     .queue-bar {
       display: none;
-      background: rgba(17, 22, 34, 0.95);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
-      padding: 8px 16px;
+      background: var(--bg-surface-elevated);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 6px 14px;
       align-items: center;
       gap: 12px;
       z-index: 90;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
     .queue-bar.active { display: flex; }
     .queue-items {
       flex: 1;
       display: flex;
-      gap: 8px;
+      gap: 6px;
       overflow-x: auto;
-      padding: 2px 0;
+      scrollbar-width: none;
     }
-    .queue-badge {
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: #fbbf24;
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 12px;
+    .queue-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-family: ui-monospace, monospace;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       white-space: nowrap;
+    }
+    .queue-item .type {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      position: relative;
+      background: #ffffff;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      height: 24px;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 11.5px;
+      color: var(--text-dim);
+    }
+    .status-text {
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .btn-run-batch {
-      background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
-      color: #fff;
-      border: none;
-      padding: 6px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 700;
-      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3);
-      transition: all 0.2s;
-    }
-    .btn-run-batch:hover {
-      filter: brightness(1.1);
-      transform: translateY(-1px);
-    }
 
-    /* Status Bar & Cyber Spinner */
-    .status-bar {
+    /* Loading Overlay */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 11, 16, 0.85);
       display: none;
+      flex-direction: column;
       align-items: center;
+      justify-content: center;
       gap: 12px;
-      background: rgba(10, 13, 20, 0.95);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(0, 242, 254, 0.3);
-      padding: 10px 20px;
-      font-size: 13px;
-      color: #38bdf8;
-      box-shadow: 0 4px 20px rgba(0, 242, 254, 0.15);
-      animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 200;
     }
-    .status-bar.active { display: flex; }
-    .spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(0, 242, 254, 0.2);
-      border-top-color: #00f2fe;
+    .loading-overlay.active { display: flex; }
+    .cyber-spinner {
+      width: 36px;
+      height: 36px;
+      border: 2px solid var(--border-subtle);
+      border-top-color: var(--primary);
       border-radius: 50%;
-      animation: cyberSpin 0.7s linear infinite;
+      animation: spin 0.8s linear infinite;
     }
-    @keyframes cyberSpin { to { transform: rotate(360deg); } }
-    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-    /* Frame Container */
-    .frame-container { flex: 1; position: relative; background: #000; }
-    iframe { width: 100%; height: 100%; border: none; background: #000; }
-
-    /* Toast Notification */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: rgba(14, 18, 27, 0.95);
-      backdrop-filter: blur(20px);
-      border: 1px solid var(--accent-cyan);
-      color: #fff;
-      padding: 12px 20px;
-      border-radius: 12px;
-      font-size: 13.5px;
-      z-index: 9999;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 254, 0.25);
-      display: none;
-      align-items: center;
-      animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
-    .toast.error { border-color: var(--accent-rose); box-shadow: 0 0 20px rgba(244, 63, 94, 0.3); }
-    .toast.file { border-color: var(--accent-emerald); box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
-    @keyframes toastIn { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .loading-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
 
     /* Settings Modal */
-    .modal-backdrop {
+    .modal-overlay {
       position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(16px);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 10000;
+      z-index: 1000;
     }
-    .modal-backdrop.open { display: flex; }
-    .modal-card {
-      background: #0b0e17;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 18px;
-      width: 520px;
-      max-width: 90%;
-      padding: 28px;
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.15);
-      animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      width: 480px;
+      max-width: 90vw;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
-    @keyframes modalPop { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    .modal-card h2 {
-      font-size: 18px;
-      color: #fff;
-      margin-bottom: 20px;
+    .modal h2 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--text);
       display: flex;
       align-items: center;
-      gap: 10px;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 12px;
+      gap: 8px;
     }
-    .form-group { margin-bottom: 16px; }
-    .form-group label { display: block; font-size: 12.5px; color: var(--text-muted); margin-bottom: 6px; }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
     .form-group input {
       width: 100%;
-      background: rgba(5, 7, 12, 0.9);
+      background: var(--bg-base);
       border: 1px solid var(--border-subtle);
       color: var(--text);
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 13.5px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: ui-monospace, monospace;
       outline: none;
       direction: ltr;
-      text-align: left;
-      transition: all 0.2s;
     }
     .form-group input:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 16px rgba(0, 242, 254, 0.25);
+      border-color: var(--border-focus);
     }
-    .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .btn-modal-cancel {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+    .btn-modal-cancel:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+    .btn-modal-save {
+      background: var(--primary);
+      border: none;
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .btn-modal-save:hover {
+      background: var(--primary-hover);
+    }
   </style>
 </head>
 <body>
 
   <!-- Top Toolbar -->
   <div class="toolbar">
-    <div class="brand-badge" title="N0PPERABO - NTTM Engine" onclick="window.pywebview.api.go_home()">
+    <!-- Brand Emblem -->
+    <div class="brand-badge" onclick="window.shellApp.goHome()" title="صفحه اصلی N0PPERABO">
       <div class="brand-logo-container">
         <img src="/assets/logo.svg" alt="N0pperabo" class="toolbar-logo" />
       </div>
-      <span class="brand-title">N0PPERABO</span>
+      <span class="brand-title">NTTM</span>
     </div>
 
+    <!-- Navigation Buttons with SVGs -->
     <div class="nav-group">
-      <button class="btn-nav" title="بازگشت" onclick="window.pywebview.api.go_back()">❮</button>
-      <button class="btn-nav" title="جلو" onclick="window.pywebview.api.go_forward()">❯</button>
-      <button class="btn-nav" title="تازه‌سازی" onclick="window.pywebview.api.reload()">↻</button>
-      <button class="btn-nav" title="صفحه شروع" onclick="window.pywebview.api.go_home()">🏠</button>
+      <button class="btn-nav" onclick="window.shellApp.goBack()" title="بازگشت (Back)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+      <button class="btn-nav" onclick="window.shellApp.goForward()" title="جلو (Forward)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
+      <button class="btn-nav" onclick="window.shellApp.reload()" title="تازه‌سازی (Reload)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="btn-nav" onclick="window.shellApp.goHome()" title="صفحه خانگی">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </button>
     </div>
 
+    <!-- URL Bar -->
     <div class="url-bar-container">
-      <span class="url-icon">🌐</span>
-      <input type="text" id="url-bar" class="url-input" placeholder="آدرس سایت (مثال: https://wikipedia.org) یا عبارت جستجو..." />
-      <button class="btn-go" onclick="window.shellApp.onGoClick()">ارسال / Go</button>
+      <span class="url-icon">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input type="text" class="url-input" id="url-input" placeholder="آدرس وب‌سایت را وارد کنید یا جستجو نمایید..." />
+      <button class="btn-go" onclick="window.shellApp.navigateFromBar()">برو</button>
     </div>
 
-    <!-- Mode Toggle Button -->
-    <div id="mode-toggle" class="mode-toggle" onclick="window.shellApp.toggleMode()">
-      <div class="mode-dot"></div>
-      <span id="mode-label">حالت مستقیم</span>
-    </div>
-
-    <!-- Daemon Fast Mode Toggle Button -->
-    <div id="daemon-btn" class="daemon-btn" onclick="window.shellApp.toggleDaemon()" title="کلیک برای روشن/خاموش کردن رانر دائمی (پاسخ فوق سریع ۲-۵ ثانیه‌ای)">
-      <div class="daemon-dot"></div>
-      <span id="daemon-label">⚡ رانر زنده: در حال بررسی...</span>
-    </div>
-
-    <!-- Custom Delay Toggle (Auto-resets after each fetch) -->
-    <div id="delay-container" class="delay-container">
-      <div id="delay-btn" class="delay-btn" onclick="window.shellApp.toggleDelay()" title="تأخیر اختصاصی در رانر برای لود کامل کپچا و صفحات سنگین (پیش‌فرض ۱۵ ثانیه)">
-        <span>⏱️</span>
-        <span id="delay-status-text">تأخیر: خاموش</span>
-      </div>
-      <div id="delay-input-box" class="delay-input-box" style="display: none;">
-        <input type="number" id="delay-seconds-input" min="1" max="180" value="15" title="ثانیه تأخیر در رانر" oninput="window.shellApp.onDelayChange()" onchange="window.shellApp.onDelayChange()" />
-        <span style="font-size: 11px; color: #94a3b8;">ثانیه</span>
-      </div>
-    </div>
-
+    <!-- Mode & Daemon Toggles -->
     <div class="actions-group">
-      <button class="action-btn" title="پوشه فایل‌های دانلود شده" onclick="window.pywebview.api.open_downloads_folder()">📁 دانلودها</button>
-      <button class="action-btn" title="پاکسازی کوکی‌ها و سشن ذخیره شده" onclick="window.pywebview.api.clear_session()">🧹 نشست</button>
-      <button class="action-btn" title="تنظیمات مخزن و توکن گیت‌هاب" onclick="window.shellApp.openSettings()">⚙️ تنظیمات</button>
+      <div class="mode-toggle" id="mode-toggle" onclick="window.shellApp.toggleMode()" title="تغییر حالت اجرای اکشن‌ها">
+        <span class="mode-dot"></span>
+        <span id="mode-text">مد مستقیم</span>
+      </div>
+
+      <div class="daemon-btn" id="daemon-toggle" onclick="window.shellApp.toggleDaemon()" title="رانر فعال در پس‌زمینه">
+        <span class="daemon-dot"></span>
+        <span id="daemon-text">دیمون</span>
+      </div>
+
+      <div class="delay-container" id="delay-box">
+        <div class="delay-input-box">
+          <input type="number" id="delay-val" min="1" max="60" value="5" title="ثانیه تاخیر پس از رندر صفحه" onchange="window.shellApp.updateCustomDelay()" />
+        </div>
+        <div class="delay-btn" onclick="window.shellApp.toggleCustomDelay()" title="فعال/غیرفعال‌سازی تاخیر سفارشی">
+          <span>تاخیر</span>
+        </div>
+      </div>
+
+      <button class="action-btn" id="btn-batch-send" style="display:none; color:var(--accent-amber); border-color:rgba(245,158,11,0.4);" onclick="window.shellApp.triggerBatch()" title="ارسال تغییرات به گیت‌هاب">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span>ارسال رویدادها</span>
+      </button>
+
+      <button class="action-btn" id="btn-shorts-nav" style="display:none;" onclick="window.shellApp.triggerShortsNext()" title="پیمایش شورتز یوتیوب (ویدیوی بعدی)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
+        <span>شورتز بعدی</span>
+      </button>
+
+      <button class="action-btn" onclick="window.shellApp.openSettings()" title="تنظیمات توکن و ریپازیتوری">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>تنظیمات</span>
+      </button>
     </div>
   </div>
 
-  <!-- Action Queue Bar (Batch Mode) -->
-  <div id="queue-bar" class="queue-bar">
-    <span style="font-weight: 600; color: var(--accent-amber);">صف اکشن‌ها:</span>
-    <div id="queue-items" class="queue-items">
-      <span style="color: var(--text-muted); font-size: 12px;">روی المنت‌های صفحه کلیک یا تایپ کنید تا به صف اضافه شوند...</span>
+  <!-- Batch Queue Bar -->
+  <div class="queue-bar" id="queue-bar">
+    <span style="font-size:12px; font-weight:600; color:var(--accent-amber);">صف رویدادها:</span>
+    <div class="queue-items" id="queue-items"></div>
+    <button class="action-btn" style="color:var(--accent-rose); border-color:rgba(239,68,68,0.3);" onclick="window.shellApp.clearQueue()">پاکسازی صف</button>
+  </div>
+
+  <!-- Main Web Content -->
+  <div class="content-area">
+    <iframe id="browser-frame" src="/start" sandbox="allow-scripts allow-forms allow-same-origin allow-popups"></iframe>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="cyber-spinner"></div>
+      <div class="loading-text" id="loading-text">در حال ارسال اکشن به گیت‌هاب...</div>
     </div>
-    <button class="btn-run-batch" onclick="window.shellApp.runBatch()">🚀 اجرای زنجیره در گیت‌هاب</button>
-    <button class="action-btn" onclick="window.shellApp.undoAction()">↩️ واگرد</button>
-    <button class="action-btn" onclick="window.shellApp.clearQueue()">🗑️ پاکسازی</button>
   </div>
 
-  <!-- Loading & Status Bar -->
-  <div id="status-bar" class="status-bar">
-    <div class="spinner"></div>
-    <span id="status-text">در حال ارسال درخواست به گیت‌هاب...</span>
+  <!-- Bottom Status Bar -->
+  <div class="status-bar">
+    <div class="status-text" id="status-text">
+      <span>آماده</span>
+    </div>
+    <div id="status-details">NTTM Stealth Core v2.0</div>
   </div>
-
-  <!-- Content Frame -->
-  <div class="frame-container">
-    <iframe id="content-frame" src="/start" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
-  </div>
-
-  <!-- Toast -->
-  <div id="toast" class="toast"></div>
 
   <!-- Settings Modal -->
-  <div id="settings-modal" class="modal-backdrop">
-    <div class="modal-card">
-      <h2>⚙️ تنظیمات اتصال به GitHub NTTM</h2>
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal">
+      <h2>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        تنظیمات ارتباط با مخزن گیت‌هاب
+      </h2>
       <div class="form-group">
-        <label>توکن شخصی گیت‌هاب (Personal Access Token - PAT):</label>
-        <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxx" />
+        <label>توکن دسترسی شخصی (Personal Access Token - PAT):</label>
+        <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
       </div>
       <div class="form-group">
-        <label>نام مخزن گیت‌هاب (GitHub Repository):</label>
+        <label>مخزن هدف (Target Repository):</label>
         <input type="text" id="cfg-repo" placeholder="owner/repo-name" />
       </div>
-      <div class="form-group">
-        <label>نام شاخه اصلی (Branch):</label>
-        <input type="text" id="cfg-branch" value="main" />
-      </div>
-      <div class="form-group">
-        <label>موتور جستجوی پیش‌فرض:</label>
-        <input type="text" id="cfg-search" value="https://www.google.com/search?q={query}" />
-      </div>
-      <div class="form-group">
-        <label>کلید رمزنگاری سرتاسری (AES-256-GCM) - ویژه مخازن پابلیک:</label>
-        <input type="password" id="cfg-enc" placeholder="کلید دلخواه (باید با Secret مخزن به نام ENCRYPTION_KEY یکسان باشد)" />
-      </div>
-      <div class="modal-buttons">
-        <button class="action-btn" onclick="window.shellApp.closeSettings()">انصراف</button>
-        <button class="btn-go" onclick="window.shellApp.saveSettings()">ذخیره تنظیمات</button>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">انصراف</button>
+        <button class="btn-modal-save" onclick="window.shellApp.saveSettings()">ذخیره تنظیمات</button>
       </div>
     </div>
   </div>
 
-    <script>
-    class ShellApp {
-      constructor() {
-        this.urlBar = document.getElementById('url-bar');
-        this.frame = document.getElementById('content-frame');
-        this.statusBar = document.getElementById('status-bar');
-        this.statusText = document.getElementById('status-text');
-        this.queueBar = document.getElementById('queue-bar');
-        this.queueItems = document.getElementById('queue-items');
-        this.modeToggle = document.getElementById('mode-toggle');
-        this.modeLabel = document.getElementById('mode-label');
-        this.toast = document.getElementById('toast');
+  <script>
+    window.shellApp = {
+      isBatchMode: false,
+      isDaemonActive: false,
+      isCustomDelayActive: false,
+      queue: [],
 
-        this.isBatchMode = false;
-        this.actionQueue = [];
-        this.delayEnabled = false;
-        this.currentLiveUrl = '';
-
-        this.init();
-      }
-
-      init() {
-        this.urlBar.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            this.onGoClick();
-          }
+      init: function() {
+        const urlInput = document.getElementById('url-input');
+        urlInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') this.navigateFromBar();
         });
 
-        // Inject interceptor whenever iframe finishes loading
-        this.frame.addEventListener('load', () => {
+        const frame = document.getElementById('browser-frame');
+        frame.addEventListener('load', () => {
+          this.hideLoading();
+          try {
+            const loc = frame.contentWindow.location.href;
+            if (loc && !loc.includes('/start')) {
+              urlInput.value = loc;
+              this.updateShortsButton(loc);
+            }
+          } catch(err) {}
           this.injectDeepInterceptor();
         });
 
-        // Check daemon worker status periodically
-        setTimeout(() => this.pollDaemonStatus(), 1000);
-        setInterval(() => this.pollDaemonStatus(), 12000);
-      }
+        setTimeout(() => this.injectDeepInterceptor(), 500);
 
-      pollDaemonStatus() {
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.get_daemon_status) {
-          window.pywebview.api.get_daemon_status().then((res) => {
-            this.updateDaemonUI(res.alive);
-          }).catch(() => {});
-        }
-      }
-
-      toggleDaemon() {
-        this.showToast('در حال ارسال دستور تغییر وضعیت رانر زنده...');
-        window.pywebview.api.toggle_daemon().then((res) => {
-          this.updateDaemonUI(res.alive);
-          this.showToast(res.msg);
-        }).catch((e) => {
-          this.showToast('خطا در ارتباط با رانر زنده: ' + e, true);
-        });
-      }
-
-      updateDaemonUI(isAlive) {
-        const btn = document.getElementById('daemon-btn');
-        const label = document.getElementById('daemon-label');
-        if (!btn || !label) return;
-        if (isAlive) {
-          btn.classList.add('active');
-          label.textContent = '⚡ رانر زنده: روشن (Ultra Fast)';
-        } else {
-          btn.classList.remove('active');
-          label.textContent = '⚡ رانر زنده: خاموش';
-        }
-      }
-
-      onGoClick() {
-        const val = this.urlBar.value.trim();
-        if (val) {
-          window.pywebview.api.navigate(val, this.getDelaySeconds());
-        }
-      }
-
-      toggleMode() {
-        this.isBatchMode = !this.isBatchMode;
-        if (this.isBatchMode) {
-          this.modeToggle.classList.add('batch');
-          this.modeLabel.textContent = 'حالت ضبط زنجیره‌ای (Batch)';
-          this.queueBar.classList.add('active');
-        } else {
-          this.modeToggle.classList.remove('batch');
-          this.modeLabel.textContent = 'حالت مستقیم';
-          this.queueBar.classList.remove('active');
-        }
-        this.renderQueue();
-      }
-
-      addAction(action) {
-        this.actionQueue.push(action);
-        this.renderQueue();
-        this.showToast(`گام ${this.actionQueue.length} به صف افزوده شد: ${action.type}`);
-      }
-
-      undoAction() {
-        if (this.actionQueue.length > 0) {
-          this.actionQueue.pop();
-          this.renderQueue();
-        }
-      }
-
-      clearQueue() {
-        this.actionQueue = [];
-        this.renderQueue();
-      }
-
-      renderQueue() {
-        if (this.actionQueue.length === 0) {
-          this.queueItems.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">روی المنت‌های صفحه کلیک یا تایپ کنید تا به صف اضافه شوند...</span>';
-          return;
-        }
-
-        this.queueItems.innerHTML = '';
-        this.actionQueue.forEach((act, idx) => {
-          const badge = document.createElement('div');
-          badge.className = 'queue-badge';
-          const title = act.text_hint || act.selector || act.key || act.type;
-          badge.innerHTML = `<strong>${idx + 1}.</strong> ${act.type} (${title.slice(0, 25)})`;
-          this.queueItems.appendChild(badge);
-        });
-      }
-
-      toggleDelay() {
-        this.delayEnabled = !this.delayEnabled;
-        const container = document.getElementById('delay-container');
-        const statusText = document.getElementById('delay-status-text');
-        const inputBox = document.getElementById('delay-input-box');
-        const input = document.getElementById('delay-seconds-input');
-        const sec = parseInt(input ? input.value : 15, 10) || 15;
-
-        if (this.delayEnabled) {
-          container.classList.add('active');
-          statusText.textContent = `تأخیر: ${sec}s`;
-          inputBox.style.display = 'flex';
-          this.showToast(`⏱️ تأخیر ${sec} ثانیه‌ای فعال شد (پس از دریافت داده‌ها خاموش خواهد شد)`);
-          if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
-            window.pywebview.api.set_delay(sec);
-          }
-        } else {
-          this.resetDelay();
-        }
-      }
-
-      onDelayChange() {
-        if (this.delayEnabled) {
-          const sec = this.getDelaySeconds();
-          const statusText = document.getElementById('delay-status-text');
-          if (statusText) statusText.textContent = `تأخیر: ${sec}s`;
-          if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
-            window.pywebview.api.set_delay(sec);
-          }
-        }
-      }
-
-      resetDelay() {
-        this.delayEnabled = false;
-        const container = document.getElementById('delay-container');
-        const statusText = document.getElementById('delay-status-text');
-        const inputBox = document.getElementById('delay-input-box');
-        if (container) container.classList.remove('active');
-        if (statusText) statusText.textContent = 'تأخیر: خاموش';
-        if (inputBox) inputBox.style.display = 'none';
-        if (window.pywebview && window.pywebview.api && window.pywebview.api.set_delay) {
-          window.pywebview.api.set_delay(0);
-        }
-      }
-
-      getDelaySeconds() {
-        if (!this.delayEnabled) return 0;
-        const input = document.getElementById('delay-seconds-input');
-        return parseInt(input ? input.value : 15, 10) || 15;
-      }
-
-      runBatch() {
-        if (this.actionQueue.length === 0) {
-          this.showToast('صف اکشن‌ها خالی است.', true);
-          return;
-        }
-        window.pywebview.api.run_batch_actions(this.currentLiveUrl, this.actionQueue, this.getDelaySeconds());
-        this.clearQueue();
-      }
-
-      setLoading(isLoading, msg) {
-        if (isLoading) {
-          this.statusBar.classList.add('active');
-          this.statusText.textContent = msg || 'در حال پردازش...';
-        } else {
-          this.statusBar.classList.remove('active');
-        }
-      }
-
-      updateStatus(msg) {
-        this.statusText.textContent = msg;
-      }
-
-      onPageLoaded(localUrl, targetUrl, title) {
-        this.resetDelay();
-        this.currentLiveUrl = targetUrl;
-        if (targetUrl) {
-          this.urlBar.value = targetUrl;
-        }
-        this.frame.src = localUrl;
-        if (title) {
-          document.title = title + ' - GitHub Offline Browser';
-        }
-      }
-
-      showToast(msg, isError = false, isFile = false) {
-        this.toast.className = 'toast' + (isError ? ' error' : '') + (isFile ? ' file' : '');
-        this.toast.innerHTML = isFile ? `📁 ${msg} <button style="margin-right:10px;padding:3px 8px;" onclick="window.pywebview.api.open_downloads_folder()">نمایش در پوشه</button>` : msg;
-        this.toast.style.display = 'flex';
-        setTimeout(() => {
-          this.toast.style.display = 'none';
-        }, 5000);
-      }
-
-      // Settings Modal
-      openSettings() {
-        window.pywebview.api.get_config().then((cfg) => {
-          document.getElementById('cfg-token').value = cfg.github_token || '';
-          document.getElementById('cfg-repo').value = cfg.github_repo || '';
-          document.getElementById('cfg-branch').value = cfg.branch || 'main';
-          document.getElementById('cfg-search').value = cfg.default_search_url || '';
-          document.getElementById('cfg-enc').value = cfg.encryption_key || '';
-          document.getElementById('settings-modal').classList.add('open');
-        });
-      }
-
-      closeSettings() {
-        document.getElementById('settings-modal').classList.remove('open');
-      }
-
-      saveSettings() {
-        const token = document.getElementById('cfg-token').value.trim();
-        const repo = document.getElementById('cfg-repo').value.trim();
-        const branch = document.getElementById('cfg-branch').value.trim() || 'main';
-        const searchUrl = document.getElementById('cfg-search').value.trim();
-        const encKey = document.getElementById('cfg-enc').value.trim();
-
-        window.pywebview.api.save_config(token, repo, branch, searchUrl, encKey).then((ok) => {
-          if (ok) {
-            this.showToast('تنظیمات با موفقیت ذخیره شد.');
-            this.closeSettings();
-          } else {
-            this.showToast('خطا در ذخیره تنظیمات.', true);
-          }
-        });
-      }
-
-      // Deep Interceptor injected into iframe
-      injectDeepInterceptor() {
-        try {
-          const doc = this.frame.contentDocument;
-          const win = this.frame.contentWindow;
-          if (!doc || !win) return;
-
-          // Only intercept external cached web pages under /cache/
-          // NEVER intercept internal pages like /start or about:blank!
-          try {
-            const loc = win.location;
-            if (!loc || !loc.pathname || !loc.pathname.startsWith('/cache/')) {
-              return;
-            }
-          } catch (e) {
-            return;
-          }
-
-          // Helper: Unique Descriptor Builder
-          function buildDescriptor(el) {
-            let selector = '';
-            const title = el.getAttribute ? el.getAttribute('title') : null;
-            const ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
-
-            if (title) {
-              selector = `${el.tagName.toLowerCase()}[title="${title.replace(/"/g, '\\\"')}"]`;
-            } else if (ariaLabel) {
-              selector = `${el.tagName.toLowerCase()}[aria-label="${ariaLabel.replace(/"/g, '\\\"')}"]`;
-            } else if (el.id && el.id !== 'endpoint' && !el.id.startsWith('__')) {
-              selector = '#' + el.id;
-            } else if (el.getAttribute && el.getAttribute('name')) {
-              selector = `${el.tagName.toLowerCase()}[name="${el.getAttribute('name')}"]`;
-            } else if (el.className && typeof el.className === 'string') {
-              const cls = el.className.trim().split(/\\s+/)[0];
-              if (cls) selector = `${el.tagName.toLowerCase()}.${cls}`;
-            }
-            if (!selector) {
-              selector = el.tagName.toLowerCase();
-            }
-
-            // Simple XPath
-            let xpath = '//' + el.tagName.toLowerCase();
-            if (title) {
-              xpath += `[@title='${title.replace(/'/g, "\\\\'")}']`;
-            } else if (ariaLabel) {
-              xpath += `[@aria-label='${ariaLabel.replace(/'/g, "\\\\'")}']`;
-            } else if (el.id && el.id !== 'endpoint' && !el.id.startsWith('__')) {
-              xpath += `[@id='${el.id}']`;
-            }
-
-            const textHint = (el.innerText || el.value || el.placeholder || ariaLabel || title || '').trim().slice(0, 50);
-            const rect = el.getBoundingClientRect();
-            const x = Math.round(rect.left + rect.width / 2);
-            const y = Math.round(rect.top + rect.height / 2);
-
-            return { selector, xpath, text_hint: textHint, x, y };
-          }
-
-          // Buffer for pending input values
-          win.__pendingInputs = win.__pendingInputs || {};
-
-          // 1. Input tracking (input, change in Capture phase)
-          doc.addEventListener('input', (e) => {
-            const el = e.target;
-            if (['INPUT', 'TEXTAREA'].includes(el.tagName)) {
-              const desc = buildDescriptor(el);
-              desc.type = 'fill';
-              desc.value = el.value;
-              win.__pendingInputs[desc.selector] = desc;
-
-              if (window.shellApp.isBatchMode) {
-                window.shellApp.addAction(desc);
-              }
-            }
-          }, true);
-
-          doc.addEventListener('change', (e) => {
-            const el = e.target;
-            if (el.tagName === 'SELECT') {
-              const desc = buildDescriptor(el);
-              desc.type = 'select';
-              desc.value = el.value;
-              win.__pendingInputs[desc.selector] = desc;
-              if (window.shellApp.isBatchMode) {
-                window.shellApp.addAction(desc);
-              }
-            } else if (el.type === 'checkbox' || el.type === 'radio') {
-              const desc = buildDescriptor(el);
-              desc.type = 'check';
-              desc.checked = el.checked;
-              win.__pendingInputs[desc.selector] = desc;
-              if (window.shellApp.isBatchMode) {
-                window.shellApp.addAction(desc);
-              }
-            }
-          }, true);
-
-          // 2. Link & Click Interception (Capture phase)
-          doc.addEventListener('click', (e) => {
-            const link = e.target.closest('a');
-            const hrefAttr = link ? link.getAttribute('href') : null;
-            const hasRealHref = hrefAttr && hrefAttr !== '#' && !hrefAttr.startsWith('javascript:');
-
-            if (link && hasRealHref) {
-              e.preventDefault();
-              e.stopPropagation();
-              const fullUrl = link.href;
-
-              if (window.shellApp.isBatchMode) {
-                const desc = buildDescriptor(link);
-                desc.type = 'click';
-                window.shellApp.addAction(desc);
-              } else {
-                window.pywebview.api.navigate(fullUrl, window.shellApp.getDelaySeconds());
-              }
-              return;
-            }
-
-            // Clickable buttons, SPA triggers, custom elements, tabs, menus, or links without static href
-            const clickable = e.target.closest(
-              'button, [role="button"], [role="tab"], [role="menuitem"], [role="link"], input[type="submit"], input[type="button"], summary, [onclick], ytd-guide-entry-renderer, ytd-mini-guide-entry-renderer, yt-icon-button, tp-yt-paper-item, a'
-            );
-            if (clickable) {
-              e.preventDefault();
-              e.stopPropagation();
-
-              // Special SPA heuristic: Check if it is YouTube Shorts or similar known SPA route
-              const t = (clickable.getAttribute('title') || clickable.getAttribute('aria-label') || clickable.innerText || '').toLowerCase();
-              if (window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('youtube.com')) {
-                if (t.includes('short') || t.includes('کوته‌ویدیو') || t.includes('شورت')) {
-                  window.pywebview.api.navigate('https://www.youtube.com/shorts', window.shellApp.getDelaySeconds());
-                  return;
+        setInterval(() => {
+          if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.get_current_url().then(res => {
+              if (res && res.url) {
+                if (!document.activeElement || document.activeElement.id !== 'url-input') {
+                  if (!res.url.includes('/start')) {
+                    urlInput.value = res.url;
+                  }
                 }
+                this.updateShortsButton(res.url);
               }
+            }).catch(()=>{});
+          }
+        }, 1500);
+      },
 
-              const desc = buildDescriptor(clickable);
-              desc.type = 'click';
+      updateShortsButton: function(url) {
+        const btn = document.getElementById('btn-shorts-nav');
+        if (btn) {
+          if (url && (url.includes('/shorts/') || url.includes('/shorts'))) {
+            btn.style.display = 'flex';
+          } else {
+            btn.style.display = 'none';
+          }
+        }
+      },
 
-              if (window.shellApp.isBatchMode) {
-                window.shellApp.addAction(desc);
-              } else {
-                // Collect any buffered inputs + this click
-                const actions = Object.values(win.__pendingInputs);
-                actions.push(desc);
-                win.__pendingInputs = {};
-                window.pywebview.api.dispatch_replay(window.shellApp.currentLiveUrl, actions, null, window.shellApp.getDelaySeconds());
-              }
+      triggerShortsNext: function() {
+        const frame = document.getElementById('browser-frame');
+        let currentUrl = '';
+        try {
+          currentUrl = frame.contentWindow.location.href;
+        } catch(e) {}
+        if (!currentUrl && window.pywebview && window.pywebview.api) {
+          window.pywebview.api.get_current_url().then(res => {
+            if (res && res.url) this.executeShortsNext(res.url);
+          });
+          return;
+        }
+        this.executeShortsNext(currentUrl);
+      },
+
+      executeShortsNext: function(currentUrl) {
+        let videoId = '';
+        const m = currentUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+        if (m && m[1]) videoId = m[1];
+
+        this.showLoading('در حال دریافت شورتز بعدی از گیت‌هاب...');
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.navigate_shorts_next(videoId).then(res => {
+            if (res && res.error) {
+              this.hideLoading();
+              alert('خطا در بارگذاری شورتز بعدی: ' + res.error);
             }
-          }, true);
+          }).catch(err => {
+            this.hideLoading();
+            alert('خطای سیستمی: ' + err);
+          });
+        }
+      },
 
-          // 2.5 YouTube Shorts Wheel & Keyboard Navigation
-          let wheelCooldown = false;
-          doc.addEventListener('wheel', (e) => {
-            const isShorts = (win.location && win.location.href && win.location.href.includes('/shorts/'))
-              || (window.shellApp && window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('/shorts/'));
-            if (!isShorts || wheelCooldown) return;
+      showLoading: function(text) {
+        document.getElementById('loading-text').textContent = text || 'در حال ارسال اکشن به گیت‌هاب...';
+        document.getElementById('loading-overlay').classList.add('active');
+        document.getElementById('status-text').innerHTML = '<span>' + (text || 'در حال پردازش...') + '</span>';
+      },
 
-            if (e.deltaY > 30) {
-              wheelCooldown = true;
-              setTimeout(() => { wheelCooldown = false; }, 2500);
-              const nextBtn = doc.querySelector('#navigation-button-down button, button[aria-label*="بعدی"], button[aria-label*="Next"]');
-              if (nextBtn) {
-                e.preventDefault();
-                nextBtn.click();
-              }
-            } else if (e.deltaY < -30) {
-              wheelCooldown = true;
-              setTimeout(() => { wheelCooldown = false; }, 2500);
-              const prevBtn = doc.querySelector('#navigation-button-up button, button[aria-label*="قبلی"], button[aria-label*="Previous"]');
-              if (prevBtn) {
-                e.preventDefault();
-                prevBtn.click();
-              }
-            }
-          }, { passive: false });
+      hideLoading: function() {
+        document.getElementById('loading-overlay').classList.remove('active');
+        document.getElementById('status-text').innerHTML = '<span>آماده</span>';
+      },
 
-          doc.addEventListener('keydown', (e) => {
-            const isShorts = (win.location && win.location.href && win.location.href.includes('/shorts/'))
-              || (window.shellApp && window.shellApp.currentLiveUrl && window.shellApp.currentLiveUrl.includes('/shorts/'));
-            if (!isShorts) return;
+      navigateFromBar: function() {
+        let val = document.getElementById('url-input').value.trim();
+        if (!val) return;
+        if (!val.startsWith('http://') && !val.startsWith('https://')) {
+          if (val.includes('.') && !val.includes(' ')) {
+            val = 'https://' + val;
+          } else {
+            val = 'https://www.google.com/search?q=' + encodeURIComponent(val);
+          }
+        }
+        this.navigate(val);
+      },
 
-            if (e.key === 'ArrowDown' || e.key === 'PageDown') {
-              const nextBtn = doc.querySelector('#navigation-button-down button, button[aria-label*="بعدی"], button[aria-label*="Next"]');
-              if (nextBtn) {
-                e.preventDefault();
-                nextBtn.click();
-              }
-            } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
-              const prevBtn = doc.querySelector('#navigation-button-up button, button[aria-label*="قبلی"], button[aria-label*="Previous"]');
-              if (prevBtn) {
-                e.preventDefault();
-                prevBtn.click();
-              }
+      navigate: function(url) {
+        this.showLoading('در حال بارگذاری صفحه از طریق رانر گیت‌هاب...');
+        this.updateShortsButton(url);
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.navigate(url).then(res => {
+            if (res && res.error) {
+              this.hideLoading();
+              alert('خطا: ' + res.error);
             }
           });
-
-          // 3. Form Submission Interception
-          doc.addEventListener('submit', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const form = e.target;
-            const actionUrl = form.action || window.shellApp.currentLiveUrl;
-            const method = (form.method || 'GET').toUpperCase();
-
-            // Collect inputs
-            const formData = new FormData(form);
-            const params = new URLSearchParams();
-            for (const [k, v] of formData.entries()) {
-              params.append(k, v);
-            }
-
-            if (window.shellApp.isBatchMode) {
-              const desc = buildDescriptor(form);
-              desc.type = 'click';
-              window.shellApp.addAction(desc);
-            } else {
-              if (method === 'GET') {
-                const delim = actionUrl.includes('?') ? '&' : '?';
-                window.pywebview.api.navigate(actionUrl + delim + params.toString(), window.shellApp.getDelaySeconds());
-              } else {
-                const bodyStr = params.toString();
-                const bodyB64 = btoa(unescape(encodeURIComponent(bodyStr)));
-                window.pywebview.api.submit_form(actionUrl, method, 'application/x-www-form-urlencoded', bodyB64, window.shellApp.getDelaySeconds());
-              }
-            }
-          }, true);
-
-          // 4. AJAX Trap (window.fetch and XMLHttpRequest)
-          const origFetch = win.fetch;
-          win.fetch = async function(resource, init = {}) {
-            const url = typeof resource === 'string' ? resource : resource.url;
-            const method = (init.method || 'GET').toUpperCase();
-            let bodyB64 = '';
-            if (init.body && typeof init.body === 'string') {
-              try { bodyB64 = btoa(unescape(encodeURIComponent(init.body))); } catch {}
-            }
-            const ajaxData = {
-              captured: true,
-              url: new URL(url, win.location.href).href,
-              method: method,
-              headers: init.headers || {},
-              body_base64: bodyB64
-            };
-            if (!window.shellApp.isBatchMode) {
-              window.pywebview.api.dispatch_replay(window.shellApp.currentLiveUrl, [], ajaxData);
-            }
-            return new Response(JSON.stringify({ offline: true }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          };
-
-        } catch (err) {
-          console.warn('Deep interceptor injection notice:', err);
+        } else {
+          document.getElementById('browser-frame').src = url;
         }
-      }
-    }
+      },
 
-    window.shellApp = new ShellApp();
+      goHome: function() {
+        document.getElementById('browser-frame').src = '/start';
+        document.getElementById('url-input').value = '';
+        this.updateShortsButton('');
+      },
+
+      goBack: function() {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.go_back();
+        } else {
+          window.history.back();
+        }
+      },
+
+      goForward: function() {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.go_forward();
+        } else {
+          window.history.forward();
+        }
+      },
+
+      reload: function() {
+        if (window.pywebview && window.pywebview.api) {
+          this.showLoading('در حال بازخوانی صفحه...');
+          window.pywebview.api.reload();
+        } else {
+          document.getElementById('browser-frame').contentWindow.location.reload();
+        }
+      },
+
+      toggleMode: function() {
+        this.isBatchMode = !this.isBatchMode;
+        const toggle = document.getElementById('mode-toggle');
+        const text = document.getElementById('mode-text');
+        const sendBtn = document.getElementById('btn-batch-send');
+        const qBar = document.getElementById('queue-bar');
+
+        if (this.isBatchMode) {
+          toggle.classList.add('batch');
+          text.textContent = 'مد دسته‌ای';
+          sendBtn.style.display = 'flex';
+          qBar.classList.add('active');
+        } else {
+          toggle.classList.remove('batch');
+          text.textContent = 'مد مستقیم';
+          sendBtn.style.display = 'none';
+          qBar.classList.remove('active');
+        }
+
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.set_batch_mode(this.isBatchMode);
+        }
+      },
+
+      toggleDaemon: function() {
+        this.isDaemonActive = !this.isDaemonActive;
+        const btn = document.getElementById('daemon-toggle');
+        const text = document.getElementById('daemon-text');
+
+        if (this.isDaemonActive) {
+          btn.classList.add('active');
+          text.textContent = 'دیمون فعال';
+        } else {
+          btn.classList.remove('active');
+          text.textContent = 'دیمون';
+        }
+
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.toggle_daemon(this.isDaemonActive);
+        }
+      },
+
+      toggleCustomDelay: function() {
+        this.isCustomDelayActive = !this.isCustomDelayActive;
+        const container = document.getElementById('delay-box');
+        if (this.isCustomDelayActive) {
+          container.classList.add('active');
+        } else {
+          container.classList.remove('active');
+        }
+        this.updateCustomDelay();
+      },
+
+      updateCustomDelay: function() {
+        const valInput = document.getElementById('delay-val');
+        let sec = parseInt(valInput.value, 10);
+        if (isNaN(sec) || sec < 1) sec = 1;
+        if (sec > 60) sec = 60;
+        valInput.value = sec;
+
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.set_custom_delay(this.isCustomDelayActive ? sec : 0);
+        }
+      },
+
+      queueAction: function(action) {
+        this.queue.push(action);
+        this.renderQueue();
+      },
+
+      renderQueue: function() {
+        const container = document.getElementById('queue-items');
+        container.innerHTML = '';
+        this.queue.forEach((item, idx) => {
+          const div = document.createElement('div');
+          div.className = 'queue-item';
+          div.innerHTML = '<span class="type">' + item.type + '</span> <span>' + (item.selector || item.text || item.key || '') + '</span>';
+          container.appendChild(div);
+        });
+      },
+
+      clearQueue: function() {
+        this.queue = [];
+        this.renderQueue();
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.clear_batch_queue();
+        }
+      },
+
+      triggerBatch: function() {
+        if (this.queue.length === 0) {
+          alert('صف رویدادها خالی است.');
+          return;
+        }
+        this.showLoading('در حال ارسال صف اکشن‌ها به گیت‌هاب...');
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.send_batch().then(res => {
+            this.clearQueue();
+          });
+        }
+      },
+
+      openSettings: function() {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.get_config().then(cfg => {
+            document.getElementById('cfg-token').value = cfg.token || '';
+            document.getElementById('cfg-repo').value = cfg.repo || '';
+            document.getElementById('settings-modal').classList.add('active');
+          });
+        } else {
+          document.getElementById('settings-modal').classList.add('active');
+        }
+      },
+
+      closeSettings: function() {
+        document.getElementById('settings-modal').classList.remove('active');
+      },
+
+      saveSettings: function() {
+        const token = document.getElementById('cfg-token').value.trim();
+        const repo = document.getElementById('cfg-repo').value.trim();
+        if (!token || !repo) {
+          alert('لطفاً هر دو فیلد توکن و ریپازیتوری را پر کنید.');
+          return;
+        }
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.save_config(token, repo).then(res => {
+            if (res.success) {
+              alert('تنظیمات با موفقیت ذخیره شد.');
+              this.closeSettings();
+            } else {
+              alert('خطا در ذخیره: ' + res.error);
+            }
+          });
+        }
+      },
+
+      injectDeepInterceptor: function() {
+        const frame = document.getElementById('browser-frame');
+        try {
+          const doc = frame.contentDocument || frame.contentWindow.document;
+          if (!doc || doc._injectedNTTM) return;
+          doc._injectedNTTM = true;
+
+          const script = doc.createElement('script');
+          script.textContent = `
+            (function() {
+              function getBestSelector(el) {
+                if (!el || el === document.body) return 'body';
+                if (el.id) return '#' + el.id;
+                if (el.name) return el.tagName.toLowerCase() + '[name="' + el.name + '"]';
+                if (el.className && typeof el.className === 'string') {
+                  const c = el.className.trim().split(/\s+/)[0];
+                  if (c) return el.tagName.toLowerCase() + '.' + c;
+                }
+                return el.tagName.toLowerCase();
+              }
+
+              document.addEventListener('click', function(e) {
+                let target = e.target.closest('a') || e.target.closest('button') || e.target.closest('input[type="submit"]') || e.target;
+                if (target) {
+                  let href = target.getAttribute('href');
+                  if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const absoluteUrl = new URL(href, window.location.href).href;
+                    window.parent.shellApp.navigate(absoluteUrl);
+                    return false;
+                  }
+
+                  if (window.parent.shellApp.isBatchMode) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.parent.shellApp.queueAction({
+                      type: 'click',
+                      selector: getBestSelector(target)
+                    });
+                    return false;
+                  }
+                }
+              }, true);
+
+              document.addEventListener('submit', function(e) {
+                if (window.parent.shellApp.isBatchMode) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.parent.shellApp.queueAction({
+                    type: 'submit',
+                    selector: getBestSelector(e.target)
+                  });
+                  return false;
+                }
+              }, true);
+            })();
+          `;
+          doc.head.appendChild(script);
+        } catch(err) {}
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => window.shellApp.init());
   </script>
 </body>
 </html>
 """
 
     def _generate_start_page_html(self) -> str:
-        token_status = "✅ فعال و متصل" if self.config.github_token else "❌ تنظیم نشده"
-        repo_status = self.config.github_repo if self.config.github_repo else "❌ تنظیم نشده"
-        cookies_count = len(self.session_manager.cookies)
+        """Generates clean, Anti-Slop compliant start page adhering to DESIGN.md."""
+        token_status = "ثبت شده" if self.config.get("github_token") else "تنظیم نشده"
+        repo_status = self.config.get("github_repo", "تنظیم نشده")
+        cookies_count = len(self.config.get("cookies", []))
 
         return f"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>N0PPERABO - NTTM Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N0PPERABO - NTTM Home</title>
   <style>
     :root {{
-      --bg-base: #050608;
-      --bg-surface: #0a0d14;
-      --bg-card: rgba(13, 17, 26, 0.72);
-      --bg-card-hover: rgba(20, 27, 42, 0.85);
-      --primary: #00f2fe;
-      --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-      --accent-purple: #8b5cf6;
+      --bg-base: #090b10;
+      --bg-surface: #11141c;
+      --bg-surface-elevated: #161b26;
+      --border-subtle: #232a3b;
+      --border-focus: #3b82f6;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
       --accent-emerald: #10b981;
       --accent-amber: #f59e0b;
       --text: #f8fafc;
       --text-muted: #94a3b8;
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-glow: 0 0 20px rgba(0, 242, 254, 0.25);
+      --text-dim: #64748b;
     }}
     * {{
       box-sizing: border-box;
@@ -1545,306 +1403,274 @@ class OfflineBrowserUI:
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
     }}
     body {{
-      background-color: var(--bg-base);
-      background-image:
-        radial-gradient(ellipse at 50% 0%, rgba(0, 242, 254, 0.12) 0%, transparent 60%),
-        radial-gradient(ellipse at 80% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 20% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+      background: var(--bg-base);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px 60px;
-      overflow-x: hidden;
-      user-select: none;
-    }}
-    .container {{
-      width: 100%;
-      max-width: 920px;
-      margin: 0 auto;
+      justify-content: center;
+      padding: 24px;
     }}
 
-    /* Hero Section */
-    .hero-section {{
+    .container {{
+      max-width: 680px;
+      width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      text-align: center;
-      margin-bottom: 35px;
-      position: relative;
+      gap: 28px;
     }}
-    .hero-logo-wrapper {{
-      position: relative;
+
+    /* Hero Branding */
+    .hero {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+    }}
+    .hero-logo-box {{
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 20px;
-    }}
-    .hero-logo-glow {{
-      position: absolute;
-      width: 320px;
-      height: 120px;
-      background: radial-gradient(ellipse, rgba(0, 242, 254, 0.35) 0%, rgba(99, 102, 241, 0.2) 40%, transparent 70%);
-      filter: blur(30px);
-      z-index: 1;
-      animation: pulseGlow 4s ease-in-out infinite alternate;
-    }}
-    @keyframes pulseGlow {{
-      0% {{ opacity: 0.5; transform: scale(0.9); }}
-      100% {{ opacity: 0.9; transform: scale(1.15); }}
+      padding: 8px;
     }}
     .hero-logo {{
-      position: relative;
-      z-index: 2;
-      width: 300px;
-      max-width: 85vw;
+      width: 110px;
       height: auto;
       object-fit: contain;
-      filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 35px rgba(0, 242, 254, 0.4));
-      animation: floatLogo 5s ease-in-out infinite alternate;
     }}
-    @keyframes floatLogo {{
-      0% {{ transform: translateY(0px); }}
-      100% {{ transform: translateY(-7px); }}
+    .hero h1 {{
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text);
     }}
-    .hero-title {{
-      font-size: 32px;
-      font-weight: 900;
-      letter-spacing: 2px;
-      color: #fff;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-    }}
-    .gradient-text {{
-      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 50%, #8b5cf6 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }}
-    .hero-lead {{
+    .hero p {{
       color: var(--text-muted);
-      font-size: 14.5px;
-      line-height: 1.6;
-      max-width: 650px;
-      margin: 0 auto;
+      font-size: 13.5px;
+      line-height: 1.5;
     }}
 
-    /* Search Card */
-    .search-card {{
-      background: var(--bg-card);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid var(--border-subtle);
-      border-radius: 18px;
-      padding: 24px;
-      margin-bottom: 30px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 242, 254, 0.08);
-      transition: all 0.3s;
-    }}
-    .search-card:focus-within {{
-      border-color: rgba(0, 242, 254, 0.45);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(0, 242, 254, 0.18);
-    }}
-    .search-input-group {{
+    /* Search Box */
+    .search-box {{
+      width: 100%;
       display: flex;
-      gap: 10px;
-      margin-bottom: 18px;
-    }}
-    .search-input-group input {{
-      flex: 1;
-      background: rgba(6, 8, 14, 0.9);
+      background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
-      color: #fff;
-      padding: 14px 18px;
-      border-radius: 12px;
-      font-size: 15px;
-      outline: none;
-      direction: rtl;
-      transition: all 0.25s;
+      border-radius: 6px;
+      padding: 3px;
+      transition: border-color 0.15s ease;
     }}
-    .search-input-group input:focus {{
-      border-color: var(--primary);
-      box-shadow: 0 0 16px rgba(0, 242, 254, 0.2);
+    .search-box:focus-within {{
+      border-color: var(--border-focus);
+    }}
+    .search-input-wrapper {{
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+    }}
+    .search-icon {{
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+    }}
+    .search-box input {{
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 13.5px;
+      padding: 9px 0;
+      outline: none;
+    }}
+    .search-box input::placeholder {{
+      color: var(--text-dim);
     }}
     .btn-search {{
-      background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-      color: #030712;
+      background: var(--primary);
       border: none;
-      padding: 0 28px;
-      border-radius: 12px;
-      font-size: 14.5px;
-      font-weight: 700;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0 18px;
+      border-radius: 4px;
       cursor: pointer;
-      box-shadow: 0 4px 15px rgba(0, 242, 254, 0.3);
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: background 0.15s ease;
     }}
     .btn-search:hover {{
-      transform: translateY(-2px);
-      box-shadow: 0 6px 22px rgba(0, 242, 254, 0.5);
-      filter: brightness(1.1);
-    }}
-    .btn-search:active {{
-      transform: scale(0.97);
+      background: var(--primary-hover);
     }}
 
-    /* Quick Access Grid */
+    /* Quick Grid */
     .quick-grid {{
+      width: 100%;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 12px;
-      margin-bottom: 30px;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
     }}
     .quick-card {{
-      background: var(--bg-card);
-      backdrop-filter: blur(16px);
+      background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
-      padding: 14px 12px;
-      border-radius: 14px;
-      text-decoration: none;
-      color: var(--text);
+      border-radius: 6px;
+      padding: 12px 6px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-      text-align: center;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      color: var(--text);
     }}
     .quick-card:hover {{
-      background: var(--bg-card-hover);
-      border-color: var(--primary);
-      box-shadow: 0 8px 25px rgba(0, 242, 254, 0.2);
-      transform: translateY(-3px);
+      background: var(--bg-surface-elevated);
+      border-color: var(--text-dim);
     }}
-    .quick-icon {{
-      font-size: 24px;
-      line-height: 1;
+    .quick-icon-svg {{
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+    }}
+    .quick-card:hover .quick-icon-svg {{
+      color: var(--text);
     }}
     .quick-name {{
-      font-size: 12.5px;
-      font-weight: 600;
-      color: #e2e8f0;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }}
+    .quick-card:hover .quick-name {{
+      color: var(--text);
     }}
 
     /* Info Grid */
     .info-grid {{
+      width: 100%;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 30px;
-    }}
-    @media (max-width: 720px) {{
-      .info-grid {{ grid-template-columns: 1fr; }}
+      gap: 12px;
     }}
     .info-card {{
-      background: var(--bg-card);
-      backdrop-filter: blur(16px);
+      background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
-      border-radius: 16px;
-      padding: 22px;
-      font-size: 13px;
-      line-height: 1.7;
-      color: #cbd5e1;
-      transition: all 0.25s;
-    }}
-    .info-card:hover {{
-      border-color: rgba(255, 255, 255, 0.16);
-      transform: translateY(-2px);
+      border-radius: 6px;
+      padding: 16px;
+      font-size: 12px;
+      line-height: 1.6;
     }}
     .info-card h3 {{
-      color: var(--primary);
-      margin-bottom: 12px;
-      font-size: 15.5px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-weight: 700;
+      gap: 6px;
+    }}
+    .info-card p {{
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }}
+    .info-card p:last-child {{
+      margin-bottom: 0;
     }}
     .badge {{
       display: inline-block;
-      padding: 2px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: ui-monospace, monospace;
+      font-weight: 600;
     }}
     .badge-ok {{
-      background: rgba(16, 185, 129, 0.18);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.35);
-    }}
-    .badge-warn {{
-      background: rgba(245, 158, 11, 0.18);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.35);
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }}
     .cfg-link {{
       color: var(--primary);
       cursor: pointer;
-      font-weight: 600;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.2s;
+      text-decoration: underline;
+      font-weight: 500;
     }}
     .cfg-link:hover {{
-      color: #7dd3fc;
-      text-decoration: underline;
+      color: var(--primary-hover);
     }}
 
-    /* Footer */
     .footer {{
-      text-align: center;
+      font-size: 11px;
       color: var(--text-dim);
-      font-size: 12px;
-      letter-spacing: 1px;
-      margin-top: 10px;
+      font-family: ui-monospace, monospace;
+      letter-spacing: 0.5px;
+      margin-top: 8px;
     }}
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="hero-section">
-      <div class="hero-logo-wrapper">
-        <div class="hero-logo-glow"></div>
+    <!-- Hero Branding -->
+    <div class="hero">
+      <div class="hero-logo-box">
         <img src="/assets/logo.svg" alt="N0pperabo Logo" class="hero-logo" />
       </div>
-      <h1 class="hero-title">N0PPERABO <span class="gradient-text">BROWSER</span></h1>
-      <p class="hero-lead">مرورگر آفلاین ضدتحریم و ناشناس • اتصال مستقیم از طریق GitHub Actions Runner • امنیت رمزنگاری شده</p>
+      <h1>N0PPERABO</h1>
+      <p>مرورگر غیرمستقیم NTTM با تانل رانر گیت‌هاب و موتور Stealth</p>
     </div>
 
-    <!-- Search Section -->
-    <div class="search-card">
-      <div class="search-input-group">
-        <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن آدرس وبسایت..." onkeydown="if(event.key==='Enter') doSearch()" />
-        <button class="btn-search" onclick="doSearch()">جستجو در وب</button>
+    <!-- Search Input Bar -->
+    <div class="search-box">
+      <div class="search-input-wrapper">
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن آدرس وب‌سایت..." onkeydown="if(event.key==='Enter') doSearch()" />
       </div>
+      <button class="btn-search" onclick="doSearch()">جستجو</button>
     </div>
 
-    <!-- Quick Access Grid -->
+    <!-- Quick Access Grid with SVGs -->
     <div class="quick-grid">
       <div class="quick-card" onclick="quickNav('https://www.google.com')">
-        <span class="quick-icon">🔍</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        </div>
         <span class="quick-name">Google</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://duckduckgo.com')">
-        <span class="quick-icon">🦆</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+        </div>
         <span class="quick-name">DuckDuckGo</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://www.youtube.com')">
-        <span class="quick-icon">▶️</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
         <span class="quick-name">YouTube</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://fa.wikipedia.org')">
-        <span class="quick-icon">📖</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </div>
         <span class="quick-name">Wikipedia</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://github.com/explore')">
-        <span class="quick-icon">🐙</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        </div>
         <span class="quick-name">GitHub</span>
       </div>
       <div class="quick-card" onclick="quickNav('https://stackoverflow.com')">
-        <span class="quick-icon">💻</span>
+        <div class="quick-icon-svg">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
         <span class="quick-name">Stack Overflow</span>
       </div>
     </div>
@@ -1852,139 +1678,42 @@ class OfflineBrowserUI:
     <!-- Info Grid -->
     <div class="info-grid">
       <div class="info-card">
-        <h3>⚡ راهنمای دو حالت کارکرد</h3>
-        <p><strong>۱. حالت مستقیم (Direct Mode):</strong> با کلیک روی هر لینک، دکمه یا ارسال فرم، تغییرات بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
-        <p><strong>۲. حالت زنجیره‌ای (Batch Mode):</strong> مناسب برای فرم‌های ورود و وب‌اپلیکیشن‌های تک‌صفحه‌ای (SPA). چندین کلیک و تایپ را پشت سر هم ثبت کنید و با زدن دکمه 🚀 همه را در یک رانر اجرا کنید.</p>
+        <h3>راهنمای حالت‌های کارکرد</h3>
+        <p><strong>حالت مستقیم (Direct):</strong> کلیک‌ها و ارسال فرم‌ها بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
+        <p><strong>حالت دسته‌ای (Batch):</strong> مناسب برای فرم‌های چندمرحله‌ای و لاگین. اقدامات پشت‌سرهم ثبت شده و در یک رانر گیت‌هاب اجرا می‌شوند.</p>
       </div>
 
       <div class="info-card">
-        <h3>🛡️ وضعیت سلامت اتصال</h3>
-        <p style="margin-bottom: 6px;"><strong>توکن دسترسی PAT:</strong> <span class="badge badge-ok">{token_status}</span></p>
-        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#38bdf8; font-family: monospace;">{repo_status}</span></p>
-        <p style="margin-bottom: 12px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
-        <p><a class="cfg-link" onclick="parent.window.shellApp.openSettings()">⚙️ تغییر تنظیمات و کلیدهای ارتباطی</a></p>
+        <h3>وضعیت اتصال مخزن</h3>
+        <p style="margin-bottom: 6px;"><strong>توکن دسترسی:</strong> <span class="badge badge-ok">{token_status}</span></p>
+        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:var(--text-muted); font-family: ui-monospace, monospace;">{repo_status}</span></p>
+        <p style="margin-bottom: 10px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
+        <p><a class="cfg-link" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات و کلیدهای ارتباطی</a></p>
       </div>
     </div>
 
     <div class="footer">
-      N0PPERABO • NTTM SECURE TUNNEL ENGINE • STEALTH PLAYWRIGHT CORE
+      N0PPERABO NTTM CORE • POWERED BY GITHUB RUNNERS
     </div>
   </div>
 
   <script>
-    function doSearch() {{
-      const q = document.getElementById('start-query').value.trim();
-      if (!q) return;
-      try {{
-        if (parent && parent.window && parent.window.shellApp) {{
-          parent.window.shellApp.urlBar.value = q;
-          parent.window.shellApp.onGoClick();
-          return;
-        }}
-      }} catch (e) {{}}
-      if (parent && parent.window && parent.window.pywebview && parent.window.pywebview.api) {{
-        parent.window.pywebview.api.navigate(q, 0);
-      }}
+    function quickNav(url) {{
+      parent.window.shellApp.navigate(url);
     }}
 
-    function quickNav(url) {{
-      if (!url) return;
-      try {{
-        if (parent && parent.window && parent.window.shellApp) {{
-          parent.window.shellApp.urlBar.value = url;
-          parent.window.shellApp.onGoClick();
-          return;
-        }}
-      }} catch (e) {{}}
-      if (parent && parent.window && parent.window.pywebview && parent.window.pywebview.api) {{
-        parent.window.pywebview.api.navigate(url, 0);
+    function doSearch() {{
+      const query = document.getElementById('start-query').value.trim();
+      if (!query) return;
+      if (query.startsWith('http://') || query.startsWith('https://')) {{
+        quickNav(query);
+      }} else if (query.includes('.') && !query.includes(' ')) {{
+        quickNav('https://' + query);
+      }} else {{
+        quickNav('https://www.google.com/search?q=' + encodeURIComponent(query));
       }}
     }}
   </script>
 </body>
 </html>
 """
-
-
-class WebviewApiBridge:
-    """Python bridge exposed to JavaScript under window.pywebview.api."""
-
-    def __init__(self, ui: OfflineBrowserUI):
-        # Must use leading underscore so pywebview does not inspect ui.window.native recursively
-        self._ui = ui
-
-    def set_delay(self, seconds: Any = 0):
-        self._ui.set_delay(seconds)
-
-    def get_delay(self) -> int:
-        return self._ui.current_delay_seconds
-
-    def navigate(self, target_url: str, custom_delay_seconds: int = 0):
-        self._ui.dispatch_navigate(target_url, custom_delay_seconds)
-
-    def submit_form(
-        self, action_url: str, method: str, content_type: str, body_base64: str, custom_delay_seconds: int = 0
-    ):
-        self._ui.dispatch_form_submit(action_url, method, content_type, body_base64, custom_delay_seconds)
-
-    def dispatch_replay(
-        self,
-        target_url: str,
-        actions: List[Dict[str, Any]],
-        intercepted_ajax: Optional[Dict[str, Any]] = None,
-        custom_delay_seconds: int = 0,
-    ):
-        self._ui.dispatch_replay(target_url, actions, intercepted_ajax, custom_delay_seconds)
-
-    def run_batch_actions(self, target_url: str, actions: List[Dict[str, Any]], custom_delay_seconds: int = 0):
-        self._ui.dispatch_replay(target_url, actions, None, custom_delay_seconds)
-
-    def open_downloads_folder(self):
-        self._ui.open_downloads_folder()
-
-    def clear_session(self):
-        self._ui.clear_session()
-
-    def go_back(self):
-        self._ui.go_back()
-
-    def go_forward(self):
-        self._ui.go_forward()
-
-    def reload(self):
-        self._ui.reload()
-
-    def go_home(self):
-        self._ui.go_home()
-
-    def get_config(self) -> Dict[str, Any]:
-        return self._ui.config.to_dict()
-
-    def get_daemon_status(self) -> Dict[str, Any]:
-        alive = self._ui.transport.is_daemon_alive()
-        return {"alive": alive}
-
-    def toggle_daemon(self) -> Dict[str, Any]:
-        alive = self._ui.transport.is_daemon_alive()
-        if alive:
-            ok, msg = self._ui.transport.stop_daemon()
-            return {"alive": False, "msg": "رانر زنده متوقف شد."}
-        else:
-            ok, msg = self._ui.transport.start_daemon(idle_timeout_min=30)
-            return {"alive": True, "msg": "درخواست راه‌اندازی رانر زنده ارسال شد. ظرف ۳۰ الی ۴۵ ثانیه آماده می‌شود..."}
-
-    def save_config(
-        self, token: str, repo: str, branch: str, search_url: str, encryption_key: str = ""
-    ) -> bool:
-        try:
-            self._ui.config.github_token = token.strip()
-            self._ui.config.github_repo = repo.strip()
-            self._ui.config.branch = branch.strip() or "main"
-            if search_url:
-                self._ui.config.default_search_url = search_url.strip()
-            self._ui.config.encryption_key = encryption_key.strip()
-            self._ui.config.save()
-            return True
-        except Exception as e:
-            logger.error(f"Save config error: {e}")
-            return False
