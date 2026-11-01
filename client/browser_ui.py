@@ -23,16 +23,75 @@ logger = logging.getLogger("BrowserUI")
 class LocalAssetHandler(SimpleHTTPRequestHandler):
     """
     HTTP server serving static assets, cached offline web pages,
-    and the integrated browser shell.
+    and the integrated browser shell. Also provides an HTTP/JSON RPC
+    bridge when running in external browser mode (--browser).
     """
 
     cache_dir: Path = Path.home() / ".gh_offline_browser" / "cache"
     shell_html: str = ""
     start_html: str = ""
+    ui: Optional["OfflineBrowserUI"] = None
+    api: Optional["WebviewApiBridge"] = None
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        if path == "/api/call":
+            length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(length) if length > 0 else b"{}"
+            try:
+                data = json.loads(body_bytes.decode("utf-8"))
+                method_name = data.get("method", "")
+                args = data.get("args", [])
+                if not isinstance(args, list):
+                    args = []
+
+                if self.api and hasattr(self.api, method_name):
+                    method = getattr(self.api, method_name)
+                    result = method(*args)
+                    resp = {"status": "ok", "result": result}
+                else:
+                    resp = {"status": "error", "message": f"Method {method_name} not found"}
+            except Exception as e:
+                logger.exception(f"API call error: {e}")
+                resp = {"status": "error", "message": str(e)}
+
+            resp_bytes = json.dumps(resp).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+            return
+
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b"Not Found")
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        if path == "/api/events":
+            events = []
+            if self.ui:
+                events = self.ui.pop_js_events()
+            resp_bytes = json.dumps(events).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+            return
 
         if path in ("/", "/index.html", "/shell"):
             self.send_response(200)
@@ -109,6 +168,9 @@ class OfflineBrowserUI:
         self.window = None
         self.server_port = 0
         self.server_thread = None
+        self._browser_mode: bool = False
+        self._js_events: List[str] = []
+        self._js_events_lock = threading.Lock()
 
         # History navigation
         self.history: List[Dict[str, str]] = []
@@ -121,11 +183,23 @@ class OfflineBrowserUI:
         self.action_queue: List[Dict[str, Any]] = []
         self.current_delay_seconds: int = 0
 
+    def push_js_event(self, js_code: str):
+        with self._js_events_lock:
+            self._js_events.append(js_code)
+
+    def pop_js_events(self) -> List[str]:
+        with self._js_events_lock:
+            events = list(self._js_events)
+            self._js_events.clear()
+            return events
+
     def start_local_server(self) -> int:
         """Starts the local HTTP server on a free port."""
         LocalAssetHandler.cache_dir = self.transport.cache_base
         LocalAssetHandler.shell_html = self._generate_shell_html()
         LocalAssetHandler.start_html = self._generate_start_page_html()
+        LocalAssetHandler.ui = self
+        LocalAssetHandler.api = WebviewApiBridge(self)
 
         server = HTTPServer(("127.0.0.1", 0), LocalAssetHandler)
         self.server_port = server.server_port
@@ -138,10 +212,23 @@ class OfflineBrowserUI:
         logger.info(f"Local UI server running at http://127.0.0.1:{self.server_port}/")
         return self.server_port
 
-    def launch(self):
-        """Launches the PyWebView window."""
+    def launch(self, browser_mode: bool = False):
+        """Launches the PyWebView window or opens the system default browser."""
+        self._browser_mode = browser_mode
         port = self.start_local_server()
         url = f"http://127.0.0.1:{port}/"
+
+        if browser_mode:
+            import webbrowser
+            logger.info(f"Opening default browser at {url} (--browser mode)...")
+            webbrowser.open(url)
+            logger.info("NTTM Server is active. Press Ctrl+C in terminal to stop.")
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Browser mode closed by user.")
+            return
 
         api = WebviewApiBridge(self)
 
@@ -316,6 +403,7 @@ class OfflineBrowserUI:
                 self.window.evaluate_js(js_code)
             except Exception as e:
                 logger.debug(f"JS evaluation error: {e}")
+        self.push_js_event(js_code)
 
     def _set_loading(self, is_loading: bool, message: str = ""):
         js = f"window.shellApp.setLoading({json.dumps(is_loading)}, {json.dumps(message)})"
@@ -954,6 +1042,47 @@ class OfflineBrowserUI:
   </div>
 
   <script>
+    // Browser bridge polyfill for --browser mode (Chrome / Edge / Firefox)
+    if (!window.pywebview) {
+      window.pywebview = {
+        api: new Proxy({}, {
+          get: function(target, prop) {
+            return function(...args) {
+              return fetch('/api/call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ method: prop, args: args })
+              })
+              .then(res => res.json())
+              .then(data => {
+                if (data && data.status === 'ok') return data.result;
+                throw new Error(data ? data.message : 'API call error');
+              });
+            };
+          }
+        })
+      };
+
+      setInterval(async () => {
+        try {
+          const res = await fetch('/api/events');
+          if (res.ok) {
+            const events = await res.json();
+            if (Array.isArray(events)) {
+              for (const code of events) {
+                try {
+                  const fn = new Function(code);
+                  fn();
+                } catch(err) {
+                  console.error('Event execution failed:', err, code);
+                }
+              }
+            }
+          }
+        } catch(e) {}
+      }, 350);
+    }
+
     window.shellApp = {
       isBatchMode: false,
       isDaemonActive: false,
@@ -1816,9 +1945,9 @@ class OfflineBrowserUI:
         ctx.clearRect(0, 0, W, H);
         const t = now * 0.0018;
 
-        // Pyramid Dimensions
-        const flameHeight = Math.min(H * 0.84, 760);
-        const linesCount = 88;
+        // Pyramid Dimensions: Anchored at base, gracefully peaks below the hero logo
+        const flameHeight = Math.min(H * 0.42, 380);
+        const linesCount = 76;
         const cx = W / 2;
 
         // 1. Ambient Base Glow
@@ -1944,7 +2073,7 @@ class OfflineBrowserUI:
           sp.x += sp.vx + Math.sin(t * 3.2 + sp.life * 0.09) * 0.55;
           sp.life += 1;
 
-          if (sp.y < H - flameHeight * 1.08 || sp.life > 140) {{
+          if (sp.y < H - flameHeight * 1.05 || sp.life > 140) {{
             sp.y = H + 6;
             sp.x = Math.random() * W;
             sp.life = 0;
