@@ -376,7 +376,7 @@ class OfflineBrowserUI:
     # ---------------- HTML UI Templates ----------------
     def _generate_shell_html(self) -> str:
         """Generates the top-level browser shell with modern Anti-Slop compliant UI."""
-        return """<!DOCTYPE html>
+        return r"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -1371,9 +1371,11 @@ class OfflineBrowserUI:
 
     def _generate_start_page_html(self) -> str:
         """Generates clean, Anti-Slop compliant start page adhering to DESIGN.md."""
-        token_status = "ثبت شده" if self.config.get("github_token") else "تنظیم نشده"
-        repo_status = self.config.get("github_repo", "تنظیم نشده")
-        cookies_count = len(self.config.get("cookies", []))
+        token = getattr(self.config, "github_token", "")
+        token_status = "ثبت شده" if token else "تنظیم نشده"
+        repo_status = getattr(self.config, "github_repo", "") or "تنظیم نشده"
+        cookies = getattr(self.session_manager, "cookies", [])
+        cookies_count = len(cookies)
 
         return f"""<!DOCTYPE html>
 <html lang="fa" dir="rtl">
