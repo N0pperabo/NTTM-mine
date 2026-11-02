@@ -123,6 +123,18 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                     self.wfile.write(f.read())
                 return
 
+        if path.startswith("/assets/fonts/"):
+            font_file = Path(__file__).parent / "assets" / "fonts" / Path(path).name
+            if font_file.exists() and font_file.is_file():
+                self.send_response(200)
+                self.send_header("Content-Type", "font/woff2")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                with open(font_file, "rb") as f:
+                    self.wfile.write(f.read())
+                return
+
         if path.startswith("/cache/"):
             rel_path = path[len("/cache/") :]
             file_path = self.cache_dir / rel_path

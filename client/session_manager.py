@@ -265,6 +265,68 @@ class SessionManager:
 
         self.save_session()
 
+    def import_netscape_cookies(self, content_or_path: Any) -> int:
+        """
+        Parses Netscape / curl cookie format text and merges into cookies store.
+        Returns count of imported cookies.
+        """
+        raw_text = ""
+        if isinstance(content_or_path, (str, Path)) and Path(str(content_or_path)).exists():
+            try:
+                raw_text = Path(str(content_or_path)).read_text(encoding="utf-8", errors="ignore")
+            except Exception as e:
+                logger.warning(f"Failed to read cookie file {content_or_path}: {e}")
+                return 0
+        elif isinstance(content_or_path, str):
+            raw_text = content_or_path
+        else:
+            return 0
+
+        new_cookies = []
+        for line in raw_text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 7:
+                domain = parts[0]
+                path = parts[2]
+                secure = parts[3].upper() == "TRUE"
+                try:
+                    exp = float(parts[4])
+                    expiration = exp if exp > 0 else -1
+                except Exception:
+                    expiration = -1
+                name = parts[5]
+                val = parts[6]
+                new_cookies.append(
+                    {
+                        "name": name,
+                        "value": val,
+                        "domain": domain,
+                        "path": path,
+                        "expires": expiration,
+                        "httpOnly": False,
+                        "secure": secure,
+                        "sameSite": "Lax",
+                    }
+                )
+
+        if not new_cookies:
+            return 0
+
+        cookie_map = {
+            (c.get("name"), c.get("domain"), c.get("path", "/")): c for c in self.cookies
+        }
+        for c in new_cookies:
+            key = (c.get("name"), c.get("domain"), c.get("path", "/"))
+            cookie_map[key] = c
+
+        self.cookies = list(cookie_map.values())
+        self.save_session()
+        logger.info(f"Imported {len(new_cookies)} Netscape cookies into session.")
+        return len(new_cookies)
+
     def clear_session(self) -> None:
         """Clears all session cookies, origins, and sessionStorage."""
         self.cookies = []

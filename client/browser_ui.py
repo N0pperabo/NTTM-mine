@@ -111,7 +111,7 @@ class OfflineBrowserUI:
         api = WebviewApiBridge(self)
 
         self.window = webview.create_window(
-            title="N0PPERABO - مرورگر آفلاین NTTM",
+            title="N0PPERABO - NTTM Offline Browser",
             url=url,
             js_api=api,
             width=1366,
@@ -170,7 +170,7 @@ class OfflineBrowserUI:
     ):
         """Handles URL bar or link navigation."""
         if self.is_busy:
-            self._notify_ui("سیستم در حال حاضر مشغول پردازش درخواست قبلی است.")
+            self._notify_ui("The system is still processing the previous request.")
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
@@ -180,11 +180,11 @@ class OfflineBrowserUI:
             self.is_busy = True
             details = []
             if delay > 0:
-                details.append(f"تأخیر {delay} ثانیه‌ای")
+                details.append(f"{delay}s delay")
             if scroll_steps > 0:
-                details.append(f"{scroll_steps} مرحله اسکرول")
-            msg_suffix = f" (با {' و '.join(details)} در رانر)..." if details else "..."
-            msg = f"در حال آماده‌سازی و ارسال به گیت‌هاب{msg_suffix}"
+                details.append(f"{scroll_steps} scroll steps")
+            msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
+            msg = f"Preparing and sending to GitHub{msg_suffix}"
             self._set_loading(True, msg)
 
             def on_status(msg):
@@ -215,7 +215,7 @@ class OfflineBrowserUI:
     ):
         """Handles form submission."""
         if self.is_busy:
-            self._notify_ui("درخواست قبلی هنوز در حال پردازش است.")
+            self._notify_ui("The previous request is still processing.")
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
@@ -225,11 +225,11 @@ class OfflineBrowserUI:
             self.is_busy = True
             details = []
             if delay > 0:
-                details.append(f"تأخیر {delay} ثانیه‌ای")
+                details.append(f"{delay}s delay")
             if scroll_steps > 0:
-                details.append(f"{scroll_steps} مرحله اسکرول")
-            msg_suffix = f" (با {' و '.join(details)} در رانر)..." if details else "..."
-            msg = f"در حال ارسال اطلاعات فرم به گیت‌هاب{msg_suffix}"
+                details.append(f"{scroll_steps} scroll steps")
+            msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
+            msg = f"Sending form data to GitHub{msg_suffix}"
             self._set_loading(True, msg)
 
             body_bytes = base64.b64decode(body_base64) if body_base64 else b""
@@ -261,7 +261,7 @@ class OfflineBrowserUI:
     ):
         """Handles single or batch replay execution."""
         if self.is_busy:
-            self._notify_ui("درخواست قبلی در حال پردازش است.")
+            self._notify_ui("The previous request is still processing.")
             return
 
         delay = self.get_and_consume_delay(custom_delay_seconds)
@@ -271,11 +271,11 @@ class OfflineBrowserUI:
             self.is_busy = True
             details = []
             if delay > 0:
-                details.append(f"تأخیر {delay} ثانیه‌ای")
+                details.append(f"{delay}s delay")
             if scroll_steps > 0:
-                details.append(f"{scroll_steps} مرحله اسکرول")
-            msg_suffix = f" (با {' و '.join(details)})..." if details else "..."
-            msg = f"در حال بازپخش {len(actions)} اکشن در رانر{msg_suffix}"
+                details.append(f"{scroll_steps} scroll steps")
+            msg_suffix = f" (with {' and '.join(details)})..." if details else "..."
+            msg = f"Replaying {len(actions)} actions on the runner{msg_suffix}"
             self._set_loading(True, msg)
 
             mode = "replay"
@@ -299,17 +299,17 @@ class OfflineBrowserUI:
 
     def _handle_fetch_result(self, result: FetchResult, requested_url: str, tab_id: str = ""):
         if not result.success:
-            self._notify_ui(f"خطا: {result.error_message}", is_error=True)
+            self._notify_ui(f"Error: {result.error_message}", is_error=True)
             return
 
         if result.response_type == "file":
             filename = result.meta.get("download_filename") or Path(result.downloaded_file_path or "").name
-            msg = f"فایل با موفقیت دانلود شد: {filename}"
+            msg = f"File downloaded successfully: {filename}"
             self._notify_ui(msg, is_file=True)
             try:
                 self.storage_db.add_history(
                     url=requested_url,
-                    title=f"دانلود فایل: {filename}",
+                    title=f"File download: {filename}",
                     local_cache_path=str(result.downloaded_file_path or ""),
                 )
                 self.storage_db.set_page_cache(
@@ -393,12 +393,12 @@ class OfflineBrowserUI:
             else:
                 subprocess.Popen(["xdg-open", str(d)])
         except Exception as e:
-            self._notify_ui(f"باز کردن پوشه با خطا مواجه شد: {e}", is_error=True)
+            self._notify_ui(f"Failed to open folder: {e}", is_error=True)
 
     def clear_session(self):
         """Clears all session cookies and local storage."""
         self.session_manager.clear_session()
-        self._notify_ui("تمام کوکی‌ها و اطلاعات نشست با موفقیت پاکسازی شدند.")
+        self._notify_ui("All cookies and session data were cleared.")
 
     def go_back(self):
         if self.history_index > 0:
@@ -423,7 +423,7 @@ class OfflineBrowserUI:
             self.dispatch_navigate(self.current_url)
 
     def go_home(self):
-        self._call_js("window.shellApp.onPageLoaded('/start', '', 'صفحه شروع آفلاین')")
+        self._call_js("window.shellApp.onPageLoaded('/start', '', 'Offline Start')")
 
     # ---------------- HTML UI Templates ----------------
     # ---------------- HTML UI Templates ----------------
@@ -432,5 +432,5 @@ class OfflineBrowserUI:
         return generate_shell_html()
 
     def _generate_start_page_html(self) -> str:
-        """Generates the pure-black home screen with NTTM branding, full-width Digital Flame pyramid animation in white-to-grey spectrum, and clean dark UI."""
+        """Generates the fixed scroll-free home screen with NTTM branding, the inverted halftone dot backdrop, and clean dark UI."""
         return generate_start_page_html(self.config, self.session_manager)

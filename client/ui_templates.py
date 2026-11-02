@@ -1,7 +1,7 @@
 """
 HTML UI Templates for N0PPERABO offline browser.
 Contains generators for the full multi-tab browser shell
-and the OLED-black start page with Digital Flame animation.
+and the OLED-black start page with the halftone dot backdrop.
 """
 
 from typing import Any, Optional
@@ -10,12 +10,19 @@ from typing import Any, Optional
 def generate_shell_html() -> str:
     """Generates pure OLED black UI shell with white buttons and complete onPageLoaded handler."""
     return r"""<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>N0PPERABO - مرورگر آفلاین NTTM</title>
+  <title>N0PPERABO - NTTM Offline Browser</title>
+  <link rel="preload" href="/assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    @font-face {
+      font-family: 'Vazirmatn';
+      src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2-variations');
+      font-weight: 100 900;
+      font-display: swap;
+    }
     :root {
       --bg-base: #000000;
       --bg-surface: #0c0c0c;
@@ -33,7 +40,7 @@ def generate_shell_html() -> str:
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
+      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Tahoma, sans-serif;
     }
     body {
       background: var(--bg-base);
@@ -143,8 +150,8 @@ def generate_shell_html() -> str:
     }
     .url-input::placeholder {
       color: var(--text-dim);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
-      direction: rtl;
+      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+      direction: ltr;
       text-align: right;
     }
 
@@ -705,7 +712,7 @@ def generate_shell_html() -> str:
   <!-- Top Tabs Bar -->
   <div class="tabs-bar">
     <div class="tabs-list" id="tabs-list"></div>
-    <button class="btn-new-tab" onclick="window.shellApp.createNewTab()" title="تب جدید (Ctrl+T)">
+    <button class="btn-new-tab" onclick="window.shellApp.createNewTab()" title="New tab (Ctrl+T)">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
   </div>
@@ -713,20 +720,20 @@ def generate_shell_html() -> str:
   <!-- Top Toolbar -->
   <div class="toolbar">
     <!-- Home Button -->
-    <button class="btn-home-box" onclick="window.shellApp.goHome()" title="صفحه اصلی (Home)">Home</button>
+    <button class="btn-home-box" onclick="window.shellApp.goHome()" title="Home">Home</button>
 
     <!-- Navigation Buttons -->
     <div class="nav-group">
-      <button class="btn-nav" onclick="window.shellApp.goBack()" title="بازگشت (Back)">
+      <button class="btn-nav" onclick="window.shellApp.goBack()" title="Go back">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
-      <button class="btn-nav" onclick="window.shellApp.goForward()" title="جلو (Forward)">
+      <button class="btn-nav" onclick="window.shellApp.goForward()" title="Go forward">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
       </button>
-      <button class="btn-nav" onclick="window.shellApp.reload()" title="تازه‌سازی (Reload)">
+      <button class="btn-nav" onclick="window.shellApp.reload()" title="Reload page">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       </button>
-      <button class="btn-nav" onclick="window.shellApp.goHome()" title="صفحه خانگی">
+      <button class="btn-nav" onclick="window.shellApp.goHome()" title="Home page">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       </button>
     </div>
@@ -736,72 +743,72 @@ def generate_shell_html() -> str:
       <span class="url-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </span>
-      <input type="text" class="url-input" id="url-input" placeholder="آدرس سایت یا جستجو در گوگل..." />
-      <button class="btn-white" onclick="window.shellApp.navigateFromBar()">برو</button>
+      <input type="text" class="url-input" id="url-input" placeholder="Enter a URL or search Google..." />
+      <button class="btn-white" onclick="window.shellApp.navigateFromBar()">Go</button>
     </div>
 
     <!-- Actions & Toggles -->
     <div class="actions-group">
-      <div class="badge-toggle" id="mode-toggle" onclick="window.shellApp.toggleMode()" title="تغییر وضعیت اجرای مستقیم/دسته‌ای">
+      <div class="badge-toggle" id="mode-toggle" onclick="window.shellApp.toggleMode()" title="Switch direct/batch execution mode">
         <span class="dot-indicator"></span>
-        <span id="mode-text">مد مستقیم</span>
+        <span id="mode-text">Direct Mode</span>
       </div>
 
-      <div class="badge-toggle" id="daemon-toggle" onclick="window.shellApp.toggleDaemon()" title="رانر دائم در پس‌زمینه">
+      <div class="badge-toggle" id="daemon-toggle" onclick="window.shellApp.toggleDaemon()" title="Persistent background daemon">
         <span class="dot-indicator" style="background:#555;"></span>
-        <span id="daemon-text">دیمون</span>
+        <span id="daemon-text">Daemon</span>
       </div>
 
       <div class="scroll-container" id="scroll-box">
         <div class="scroll-input-box">
-          <input type="number" id="scroll-val" min="1" max="20" value="3" title="تعداد اسکرول صفحه (هر واحد = 1 اسکرول صفحه)" onchange="window.shellApp.updateCustomScroll()" />
+          <input type="number" id="scroll-val" min="1" max="20" value="3" title="Page scroll count (1 unit = one page scroll)" onchange="window.shellApp.updateCustomScroll()" />
         </div>
-        <div class="scroll-btn" id="scroll-btn" onclick="window.shellApp.toggleCustomScroll()" title="فعال/غیرفعال‌سازی اسکرول برای درخواست بعدی">
-          <span>اسکرول</span>
+        <div class="scroll-btn" id="scroll-btn" onclick="window.shellApp.toggleCustomScroll()" title="Toggle scrolling for the next request">
+          <span>Scroll</span>
         </div>
       </div>
 
       <div class="delay-container" id="delay-box">
         <div class="delay-input-box">
-          <input type="number" id="delay-val" min="1" max="60" value="5" title="ثانیه تاخیر پس از رندر صفحه" onchange="window.shellApp.updateCustomDelay()" />
+          <input type="number" id="delay-val" min="1" max="60" value="5" title="Delay in seconds after page render" onchange="window.shellApp.updateCustomDelay()" />
         </div>
-        <div class="delay-btn" onclick="window.shellApp.toggleCustomDelay()" title="فعال/غیرفعال‌سازی تاخیر سفارشی">
-          <span>تاخیر</span>
+        <div class="delay-btn" onclick="window.shellApp.toggleCustomDelay()" title="Toggle custom delay">
+          <span>Delay</span>
         </div>
       </div>
 
-      <button class="btn-white" id="btn-batch-send" style="display:none;" onclick="window.shellApp.triggerBatch()" title="ارسال تغییرات به گیت‌هاب">
+      <button class="btn-white" id="btn-batch-send" style="display:none;" onclick="window.shellApp.triggerBatch()" title="Send queued actions to GitHub">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        <span>ارسال رویدادها</span>
+        <span>Send Events</span>
       </button>
 
-      <button class="btn-white" id="btn-shorts-nav" style="display:none;" onclick="window.shellApp.triggerShortsNext()" title="پیمایش شورتز یوتیوب (ویدیوی بعدی)">
+      <button class="btn-white" id="btn-shorts-nav" style="display:none;" onclick="window.shellApp.triggerShortsNext()" title="Play next YouTube video">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/><line x1="19" y1="3" x2="19" y2="21"/></svg>
-        <span>شورتز بعدی</span>
+        <span>Next Video</span>
       </button>
 
-      <button class="btn-action-dark" onclick="window.shellApp.openStorageModal()" title="تاریخچه مرور و نشان‌ها (SQLite)">
+      <button class="btn-action-dark" onclick="window.shellApp.openStorageModal()" title="Browsing history and bookmarks">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>تاریخچه</span>
+        <span>History</span>
       </button>
 
-      <button class="btn-action-dark" id="btn-toggle-bookmark" onclick="window.shellApp.toggleCurrentBookmark()" title="نشان کردن این صفحه">
+      <button class="btn-action-dark" id="btn-toggle-bookmark" onclick="window.shellApp.toggleCurrentBookmark()" title="Bookmark this page">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-        <span>نشان</span>
+        <span>Bookmark</span>
       </button>
 
-      <button class="btn-action-dark" onclick="window.shellApp.openSettings()" title="تنظیمات توکن و ریپازیتوری">
+      <button class="btn-action-dark" onclick="window.shellApp.openSettings()" title="Token and repository settings">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>تنظیمات</span>
+        <span>Settings</span>
       </button>
     </div>
   </div>
 
   <!-- Batch Queue Bar -->
   <div class="queue-bar" id="queue-bar">
-    <span style="font-size:12px; font-weight:700; color:#f59e0b;">صف رویدادها:</span>
+    <span style="font-size:12px; font-weight:700; color:#f59e0b;">Action Queue:</span>
     <div class="queue-items" id="queue-items"></div>
-    <button class="btn-action-dark" style="color:#ef4444; border-color:#552222;" onclick="window.shellApp.clearQueue()">پاکسازی صف</button>
+    <button class="btn-action-dark" style="color:#ef4444; border-color:#552222;" onclick="window.shellApp.clearQueue()">Clear Queue</button>
   </div>
 
   <!-- Main Web Content -->
@@ -809,14 +816,14 @@ def generate_shell_html() -> str:
     <div id="frames-container" style="width:100%; height:100%; position:relative;"></div>
     <div class="loading-overlay" id="loading-overlay">
       <div class="spinner-ring"></div>
-      <div class="loading-text" id="loading-text">در حال پردازش درخواست در گیت‌هاب...</div>
+      <div class="loading-text" id="loading-text">Processing request on GitHub...</div>
     </div>
   </div>
 
   <!-- Bottom Status Bar -->
   <div class="status-bar">
     <div class="status-text" id="status-text">
-      <span>آماده</span>
+      <span>Ready</span>
     </div>
     <div>NTTM Core • Pure Black Edition</div>
   </div>
@@ -824,22 +831,22 @@ def generate_shell_html() -> str:
   <!-- Settings Modal -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal">
-      <h2>تنظیمات اتصال به ریپازیتوری گیت‌هاب</h2>
+      <h2>GitHub Repository Connection</h2>
       <div class="form-group">
-        <label>توکن دسترسی شخصی (GitHub PAT):</label>
+        <label>Personal Access Token (PAT):</label>
         <input type="password" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
       </div>
       <div class="form-group">
-        <label>ریپازیتوری هدف (Target Repository):</label>
+        <label>Target Repository:</label>
         <input type="text" id="cfg-repo" placeholder="owner/repo-name" />
       </div>
       <div class="form-group">
-        <label>کلید رمزگذاری سرتاسری (Encryption Key - اختیاری):</label>
-        <input type="password" id="cfg-enc" placeholder="کلید رمزگذاری امنیتی پکت‌ها (اختیاری)" />
+        <label>End-to-end Encryption Key (optional):</label>
+        <input type="password" id="cfg-enc" placeholder="Packet encryption key (optional)" />
       </div>
       <div class="modal-actions">
-        <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">انصراف</button>
-        <button class="btn-modal-save" onclick="window.shellApp.saveSettings()">ذخیره تنظیمات</button>
+        <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">Cancel</button>
+        <button class="btn-modal-save" onclick="window.shellApp.saveSettings()">Save Settings</button>
       </div>
     </div>
   </div>
@@ -849,19 +856,19 @@ def generate_shell_html() -> str:
     <div class="modal" style="width: 600px; max-width: 95vw;">
       <h2>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>پایگاه داده ذخیره‌سازی NTTM (SQLite)</span>
+        <span>NTTM Storage Database (SQLite)</span>
       </h2>
       <div class="storage-tabs">
-        <button class="storage-tab-btn active" id="tab-btn-history" onclick="window.shellApp.switchStorageTab('history')">تاریخچه مرور (History)</button>
-        <button class="storage-tab-btn" id="tab-btn-bookmarks" onclick="window.shellApp.switchStorageTab('bookmarks')">نشان‌شده‌ها (Bookmarks)</button>
+        <button class="storage-tab-btn active" id="tab-btn-history" onclick="window.shellApp.switchStorageTab('history')">History</button>
+        <button class="storage-tab-btn" id="tab-btn-bookmarks" onclick="window.shellApp.switchStorageTab('bookmarks')">Bookmarks</button>
       </div>
-      <input type="text" class="storage-search" id="storage-search-input" placeholder="جستجو در آدرس یا عنوان..." oninput="window.shellApp.onStorageSearch(this.value)" />
+      <input type="text" class="storage-search" id="storage-search-input" placeholder="Search by URL or title..." oninput="window.shellApp.onStorageSearch(this.value)" />
       <div class="storage-list" id="storage-items-container">
         <!-- Rendered by JS -->
       </div>
       <div class="modal-actions" style="justify-content: space-between; align-items: center; margin-top: 16px;">
-        <button class="btn-modal-cancel" style="color: #ef4444; border-color: #552222;" id="btn-storage-clear" onclick="window.shellApp.clearCurrentStorage()">پاکسازی تاریخچه</button>
-        <button class="btn-modal-save" onclick="window.shellApp.closeStorageModal()">بستن</button>
+        <button class="btn-modal-cancel" style="color: #ef4444; border-color: #552222;" id="btn-storage-clear" onclick="window.shellApp.clearCurrentStorage()">Clear History</button>
+        <button class="btn-modal-save" onclick="window.shellApp.closeStorageModal()">Close</button>
       </div>
     </div>
   </div>
@@ -945,7 +952,7 @@ def generate_shell_html() -> str:
         const tabId = 'tab_' + this.tabCounter + '_' + Math.random().toString(36).substr(2, 5);
         const tab = {
           id: tabId,
-          title: 'صفحه اصلی NTTM',
+          title: 'NTTM Home',
           url: url || '',
           frameSrc: url ? '' : '/start',
           history: [],
@@ -1000,7 +1007,7 @@ def generate_shell_html() -> str:
         if (this.tabs.length <= 1) {
           // Reset the only tab to start home
           const tab = this.tabs[0];
-          tab.title = 'صفحه اصلی NTTM';
+          tab.title = 'NTTM Home';
           tab.url = '';
           tab.frameSrc = '/start';
           const frame = document.getElementById('frame-' + tab.id);
@@ -1064,12 +1071,12 @@ def generate_shell_html() -> str:
             ? '<div class="tab-spinner"></div>'
             : '<div class="tab-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>';
 
-          const titleText = tab.title || (tab.url ? tab.url.replace(/^https?:\/\//, '') : 'تب جدید');
+          const titleText = tab.title || (tab.url ? tab.url.replace(/^https?:\/\//, '') : 'New Tab');
 
           el.innerHTML = `
             ${iconHtml}
             <span class="tab-title" title="${tab.url || tab.title}">${titleText}</span>
-            <button class="tab-close" onclick="window.shellApp.closeTab('${tab.id}', event)" title="بستن تب (Ctrl+W)">&times;</button>
+            <button class="tab-close" onclick="window.shellApp.closeTab('${tab.id}', event)" title="Close tab (Ctrl+W)">&times;</button>
           `;
           container.appendChild(el);
         });
@@ -1101,7 +1108,7 @@ def generate_shell_html() -> str:
         tab.isLoading = false;
         tab.currentLiveUrl = targetUrl || '';
         tab.url = targetUrl || '';
-        tab.title = title || targetUrl || 'صفحه آفلاین';
+        tab.title = title || targetUrl || 'Offline Page';
         tab.frameSrc = localUrl;
 
         this.isCustomScrollActive = false;
@@ -1133,7 +1140,7 @@ def generate_shell_html() -> str:
           this.hideLoading();
         }
         this.renderTabs();
-        this.showToast('فایل با موفقیت دانلود و ذخیره شد: ' + filename, false, true);
+        this.showToast('File downloaded and saved: ' + filename, false, true);
       },
 
       setLoading: function(isLoading, msg) {
@@ -1158,7 +1165,7 @@ def generate_shell_html() -> str:
 
       hideLoading: function() {
         document.getElementById('loading-overlay').classList.remove('active');
-        this.setStatus('آماده', 'ready');
+        this.setStatus('Ready', 'ready');
       },
 
       setStatus: function(text, state) {
@@ -1178,7 +1185,7 @@ def generate_shell_html() -> str:
 
         if (isFile) {
           const btn = document.createElement('button');
-          btn.textContent = 'باز کردن پوشه دانلود';
+          btn.textContent = 'Open Download Folder';
           btn.onclick = () => {
             if (window.pywebview && window.pywebview.api) {
               window.pywebview.api.open_downloads_folder();
@@ -1208,8 +1215,8 @@ def generate_shell_html() -> str:
 
         if (tab.id === this.activeTabId) {
           document.getElementById('url-input').value = url;
-          this.showLoading('در حال ارسال درخواست به گیت‌هاب...');
-          this.setStatus('در حال ارسال درخواست به گیت‌هاب...', 'loading');
+          this.showLoading('Sending request to GitHub...');
+          this.setStatus('Sending request to GitHub...', 'loading');
         }
         this.renderTabs();
 
@@ -1273,7 +1280,7 @@ def generate_shell_html() -> str:
         const tab = this.getActiveTab();
         if (!tab) return;
         tab.url = '';
-        tab.title = 'صفحه اصلی NTTM';
+        tab.title = 'NTTM Home';
         tab.frameSrc = '/start';
         const frame = document.getElementById('frame-' + tab.id);
         if (frame) frame.src = '/start';
@@ -1296,7 +1303,7 @@ def generate_shell_html() -> str:
         const tab = this.getActiveTab();
         if (!tab) return;
         tab.isLoading = true;
-        this.showLoading('در حال دریافت و اسکرول به شورتز بعدی...');
+        this.showLoading('Fetching and scrolling to the next video...');
         this.renderTabs();
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.navigate_shorts_next('', tab.id);
@@ -1312,17 +1319,17 @@ def generate_shell_html() -> str:
 
         if (this.isBatchMode) {
           toggle.classList.add('batch');
-          text.textContent = 'مد دسته‌ای (فعال)';
+          text.textContent = 'Batch Mode (Active)';
           sendBtn.style.display = 'flex';
           qBar.classList.add('active');
-          this.showToast('مد دسته‌ای فعال شد: کلیک‌ها و تایپ‌ها در صف ضبط می‌شوند.');
+          this.showToast('Batch Mode enabled: clicks and typing are being queued.');
           document.querySelectorAll('.tab-frame').forEach(f => this.injectDeepInterceptor(f));
         } else {
           toggle.classList.remove('batch');
-          text.textContent = 'مد مستقیم';
+          text.textContent = 'Direct Mode';
           sendBtn.style.display = 'none';
           qBar.classList.remove('active');
-          this.showToast('مد مستقیم فعال شد: اقدامات بلافاصله ارسال می‌شوند.');
+          this.showToast('Direct Mode enabled: actions are sent immediately.');
         }
 
         if (window.pywebview && window.pywebview.api) {
@@ -1337,10 +1344,10 @@ def generate_shell_html() -> str:
 
         if (this.isDaemonActive) {
           btn.classList.add('active');
-          text.textContent = 'دیمون فعال';
+          text.textContent = 'Daemon Active';
         } else {
           btn.classList.remove('active');
-          text.textContent = 'دیمون';
+          text.textContent = 'Daemon';
         }
 
         if (window.pywebview && window.pywebview.api) {
@@ -1421,7 +1428,7 @@ def generate_shell_html() -> str:
         if (!container) return;
         container.innerHTML = '';
         if (this.queue.length === 0) {
-          container.innerHTML = '<span style="color:#737373; font-size:11px;">هیچ اقدامی ثبت نشده است. روی صفحه کلیک یا تایپ کنید.</span>';
+          container.innerHTML = '<span style="color:#737373; font-size:11px;">No actions recorded yet. Click or type on the page.</span>';
           return;
         }
         this.queue.forEach((item, idx) => {
@@ -1439,21 +1446,21 @@ def generate_shell_html() -> str:
             summary = item.text_hint ? ('"' + item.text_hint + '"') : (item.selector || 'element');
           } else if (item.type === 'press') {
             typeColor = '#a855f7';
-            summary = 'کلید: ' + (item.key || 'Enter');
+            summary = 'Key: ' + (item.key || 'Enter');
           } else if (item.type === 'select') {
             typeColor = '#f59e0b';
-            summary = 'انتخاب: ' + (item.value || '');
+            summary = 'Select: ' + (item.value || '');
           } else if (item.type === 'check') {
             typeColor = '#eab308';
-            summary = (item.checked ? '✓ انتخاب' : '✗ عدم انتخاب') + ' ' + (item.selector || '');
+            summary = (item.checked ? '✓ Check' : '✗ Uncheck') + ' ' + (item.selector || '');
           } else if (item.type === 'submit') {
             typeColor = '#ef4444';
-            summary = 'ارسال فرم: ' + (item.selector || '');
+            summary = 'Submit form: ' + (item.selector || '');
           }
 
           div.innerHTML = '<span style="background:' + typeColor + '; color:#000000; font-weight:800; padding:1px 5px; border-radius:3px; font-size:10px;">' + typeText + '</span> ' +
             '<span style="color:#ffffff; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + (item.selector || '') + '">' + summary + '</span> ' +
-            '<button onclick="window.shellApp.removeQueueItem(' + idx + ')" style="background:transparent; border:none; color:#ef4444; font-size:13px; font-weight:700; cursor:pointer; padding:0 3px; line-height:1;" title="حذف این اقدام">&times;</button>';
+            '<button onclick="window.shellApp.removeQueueItem(' + idx + ')" style="background:transparent; border:none; color:#ef4444; font-size:13px; font-weight:700; cursor:pointer; padding:0 3px; line-height:1;" title="Remove this action">&times;</button>';
           container.appendChild(div);
         });
       },
@@ -1468,18 +1475,18 @@ def generate_shell_html() -> str:
 
       triggerBatch: function() {
         if (!this.queue || this.queue.length === 0) {
-          this.showToast('صف اقدامات خالی است. ابتدا روی صفحه کلیک یا تایپ کنید.', true);
+          this.showToast('The action queue is empty. Click or type on the page first.', true);
           return;
         }
         const tab = this.getActiveTab();
         const targetUrl = (tab && tab.url) || this.currentLiveUrl || document.getElementById('url-input').value;
         if (!targetUrl || targetUrl.includes('/start') || targetUrl === 'about:blank') {
-          this.showToast('آدرس صفحه مشخص نیست. لطفاً ابتدا به یک صفحه وب بروید.', true);
+          this.showToast('No page URL. Open a web page first.', true);
           return;
         }
         const delay = this.isCustomDelayActive ? parseInt(document.getElementById('delay-val').value, 10) || 5 : 0;
         const scroll = this.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
-        this.showLoading('در حال ارسال ' + this.queue.length + ' اقدام زنجیره‌ای به گیت‌هاب...');
+        this.showLoading('Sending ' + this.queue.length + ' chained actions to GitHub...');
         const actionsToSend = [...this.queue];
         this.clearQueue();
         if (window.pywebview && window.pywebview.api) {
@@ -1573,16 +1580,16 @@ def generate_shell_html() -> str:
       renderStorageList: function(items, type) {
         const container = document.getElementById('storage-items-container');
         if (!items || items.length === 0) {
-          container.innerHTML = '<div style="padding: 24px; text-align: center; color: #666; font-size: 13px;">موردی یافت نشد.</div>';
+          container.innerHTML = '<div style="padding: 24px; text-align: center; color: #666; font-size: 13px;">No results found.</div>';
           return;
         }
         let html = '';
         for (const item of items) {
-          const title = item.title || item.url || 'بدون عنوان';
+          const title = item.title || item.url || 'Untitled';
           const url = item.url || '';
-          const visits = item.visit_count ? '<span class="storage-badge">' + item.visit_count + ' بازدید</span>' : '';
+          const visits = item.visit_count ? '<span class="storage-badge">' + item.visit_count + ' visits</span>' : '';
           const delAction = type === 'bookmarks'
-            ? '<button class="storage-del-btn" onclick="event.stopPropagation(); window.shellApp.deleteBookmark(\'' + encodeURIComponent(url) + '\')" title="حذف نشان">&times;</button>'
+            ? '<button class="storage-del-btn" onclick="event.stopPropagation(); window.shellApp.deleteBookmark(\'' + encodeURIComponent(url) + '\')" title="Remove bookmark">&times;</button>'
             : '';
 
           html += '<div class="storage-item" onclick="window.shellApp.navigateFromStorage(\'' + encodeURIComponent(url) + '\')">';
@@ -1616,7 +1623,7 @@ def generate_shell_html() -> str:
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.remove_bookmark(url).then(() => {
             this.loadStorageItems();
-            this.showToast('نشان حذف شد');
+            this.showToast('Bookmark removed');
           });
         }
       },
@@ -1625,7 +1632,7 @@ def generate_shell_html() -> str:
         const tab = this.getActiveTab();
         const activeUrl = (tab && tab.url) ? tab.url : (document.getElementById('url-input') ? document.getElementById('url-input').value : '');
         if (!activeUrl || activeUrl.startsWith('about:') || activeUrl === '/start') {
-          this.showToast('آدرس نامعتبر است', true);
+          this.showToast('Invalid URL', true);
           return;
         }
         const activeTitle = (tab && tab.title) ? tab.title : activeUrl;
@@ -1633,11 +1640,11 @@ def generate_shell_html() -> str:
           window.pywebview.api.is_bookmarked(activeUrl).then(res => {
             if (res && res.bookmarked) {
               window.pywebview.api.remove_bookmark(activeUrl).then(() => {
-                this.showToast('نشان حذف شد');
+                this.showToast('Bookmark removed');
               });
             } else {
               window.pywebview.api.add_bookmark(activeUrl, activeTitle, 'default').then(() => {
-                this.showToast('نشان اضافه شد ⭐');
+                this.showToast('Bookmark added');
               });
             }
           });
@@ -1646,11 +1653,11 @@ def generate_shell_html() -> str:
 
       clearCurrentStorage: function() {
         if (this._currentStorageTab === 'history') {
-          if (confirm('آیا از پاکسازی کامل تاریخچه مطمئن هستید؟')) {
+          if (confirm('Clear the entire browsing history?')) {
             if (window.pywebview && window.pywebview.api) {
               window.pywebview.api.clear_history().then(() => {
                 this.loadStorageItems();
-                this.showToast('تاریخچه پاکسازی شد');
+                this.showToast('History cleared');
               });
             }
           }
@@ -1662,16 +1669,16 @@ def generate_shell_html() -> str:
         const repo = document.getElementById('cfg-repo').value.trim();
         const encKey = document.getElementById('cfg-enc').value.trim();
         if (!token || !repo) {
-          alert('لطفاً هر دو فیلد توکن و ریپازیتوری را پر کنید.');
+          alert('Please fill in both the token and repository fields.');
           return;
         }
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.save_config(token, repo, "main", "", encKey).then(res => {
             if (res && res.success) {
-              alert('تنظیمات با موفقیت ذخیره شد.');
+              alert('Settings saved successfully.');
               this.closeSettings();
             } else {
-              alert('خطا در ذخیره: ' + ((res && res.error) || 'خطای نامشخص'));
+              alert('Save error: ' + ((res && res.error) || 'Unknown error'));
             }
           });
         }
@@ -2035,6 +2042,32 @@ def generate_shell_html() -> str:
 """
 
 
+def _dot_backdrop() -> tuple[str, str]:
+    """Builds the owner-mandated start page backdrop as an SVG tile:
+    white dots of varying size on a jittered lattice over the black body.
+    Size distribution, gaps and lattice pitch are measured from the
+    reference image; the seed is fixed so the texture never changes."""
+    import random
+    from urllib.parse import quote
+
+    rng = random.Random(20261102)   # fixed seed: identical texture every launch
+    pitch = 27                      # px between lattice points, scaled from the reference
+    cells = 12                      # tile = 12x12 lattice cells
+    tile = pitch * cells
+    dots = []
+    for cy in range(cells):
+        for cx in range(cells):
+            if rng.random() < 0.12:
+                continue            # blank cells, like the reference gaps
+            r = 0.4 + 5.6 * (rng.random() ** 1.5)   # small dots dominate, few large
+            x = cx * pitch + pitch / 2 + rng.uniform(-0.8, 0.8)
+            y = cy * pitch + pitch / 2 + rng.uniform(-0.8, 0.8)
+            dots.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="#ffffff" fill-opacity="0.55"/>' % (x, y, r))
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">'
+           % (tile, tile, tile, tile)) + ''.join(dots) + '</svg>'
+    return 'url("data:image/svg+xml,' + quote(svg, safe=":/.=") + '")', '%dpx %dpx' % (tile, tile)
+
+
 def generate_start_page_html(
     config: Optional[Any] = None,
     session_manager: Optional[Any] = None,
@@ -2042,23 +2075,25 @@ def generate_start_page_html(
     repo_status: Optional[str] = None,
     cookies_count: Optional[int] = None,
 ) -> str:
-    """Generates the pure-black home screen with NTTM branding, full-width Digital Flame pyramid animation in white-to-grey spectrum, and clean dark UI."""
+    """Generates the fixed scroll-free home screen with NTTM branding, the inverted halftone dot backdrop, and clean dark UI."""
+    backdrop_url, backdrop_size = _dot_backdrop()
     if token_status is None:
         token = getattr(config, "github_token", "") if config else ""
-        token_status = "ثبت شده" if token else "تنظیم نشده"
+        token_status = "Configured" if token else "Not set"
     if repo_status is None:
         repo_status = getattr(config, "github_repo", "") if config else ""
-        repo_status = repo_status or "تنظیم نشده"
+        repo_status = repo_status or "Not set"
     if cookies_count is None:
         cookies = getattr(session_manager, "cookies", []) if session_manager else []
         cookies_count = len(cookies)
 
     return f"""<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="rtl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>N0PPERABO - NTTM Home</title>
+  <link rel="preload" href="/assets/fonts/Vazirmatn-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <style>
     :root {{
       --bg-base: #000000;
@@ -2070,35 +2105,40 @@ def generate_start_page_html(
       --text-muted: #a3a3a3;
       --text-dim: #737373;
     }}
+    @font-face {{
+      font-family: 'Vazirmatn';
+      src: url('/assets/fonts/Vazirmatn-Variable.woff2') format('woff2-variations');
+      font-weight: 100 900;
+      font-display: swap;
+    }}
     * {{
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Tahoma, sans-serif;
+      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Tahoma, sans-serif;
+    }}
+    /* Fixed composition: the start page never scrolls (owner direction). */
+    html, body {{
+      height: 100%;
+      overflow: hidden;
     }}
     body {{
-      background: #000000;
+      /* Owner-mandated backdrop (2026-11-02): the linked halftone dot pattern,
+         inverted. Black field, white dots of varying size on a jittered lattice
+         (sizes and gaps measured from the reference image). The radial layer
+         sits on top of the dots and is part of the background itself: it clears
+         the field around the logo with a soft fade and has no visible edge. */
+      background-color: #000000;
+      background-image:
+        radial-gradient(ellipse 75vh 55vh at 50% 34%, #000 45%, rgba(0, 0, 0, 0) 100%),
+        {backdrop_url};
+      background-size: auto, {backdrop_size};
+      background-repeat: no-repeat, repeat;
       color: #ffffff;
-      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px;
-    }}
-
-    /* Digital Flame Canvas: anchors behind the UI across the full width */
-    #flame-canvas {{
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 1.2s ease 0.2s;
-    }}
-    #flame-canvas.on {{
-      opacity: 1;
+      padding: 8px 20px;
     }}
 
     .container {{
@@ -2107,46 +2147,53 @@ def generate_start_page_html(
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 26px;
+      gap: clamp(6px, 1.4vh, 11px);
       position: relative;
       z-index: 1;
       margin: auto 0;
+      flex: 1;
+      min-height: 0;
     }}
 
-    /* Huge Hero Branding */
+    /* Huge Hero Branding: sits a step lower, sized to keep the page fixed */
     .hero {{
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 6px;
       text-align: center;
+      margin-top: clamp(3px, 1.2vh, 14px);
+      flex: 1;
+      min-height: 0;
     }}
     .hero-logo-box {{
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px;
       width: 100%;
+      flex: 1;
+      min-height: 0;
     }}
     .hero-logo {{
-      width: 680px;
-      max-width: min(92vw, 680px);
-      height: auto;
+      display: block;
+      height: 100%;
+      width: auto;
+      max-width: 96vw;
+      margin: 0 auto;
       object-fit: contain;
-      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
       animation: igniteIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) backwards;
     }}
     .hero h1 {{
-      font-size: 28px;
+      font-size: 21px;
       font-weight: 900;
-      letter-spacing: 4px;
+      letter-spacing: 3px;
       color: #ffffff;
       animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s backwards;
     }}
     .hero p {{
       color: var(--text-muted);
-      font-size: 14px;
-      line-height: 1.6;
+      font-size: 12.5px;
+      line-height: 1.4;
       animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
     }}
 
@@ -2210,7 +2257,7 @@ def generate_start_page_html(
       border: none;
       color: #ffffff;
       font-size: 14px;
-      padding: 10px 0;
+      padding: 7px 0;
       outline: none;
     }}
     .search-box input::placeholder {{
@@ -2222,7 +2269,7 @@ def generate_start_page_html(
       color: #000000;
       font-size: 14px;
       font-weight: 700;
-      padding: 0 24px;
+      padding: 0 20px;
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.15s ease;
@@ -2239,13 +2286,13 @@ def generate_start_page_html(
       width: 100%;
       display: grid;
       grid-template-columns: repeat(6, 1fr);
-      gap: 10px;
+      gap: 8px;
     }}
     .quick-card {{
       background: #0a0a0a;
       border: 1px solid #262626;
       border-radius: 8px;
-      padding: 14px 8px;
+      padding: 9px 6px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -2295,88 +2342,15 @@ def generate_start_page_html(
       color: #000000;
     }}
 
-    /* Info Grid */
-    .info-grid {{
-      width: 100%;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }}
-    .info-card {{
-      background: #0a0a0a;
-      border: 1px solid #262626;
-      border-radius: 8px;
-      padding: 18px;
-      font-size: 12.5px;
-      line-height: 1.6;
-      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.66s backwards;
-    }}
-    .info-card h3 {{
-      font-size: 13.5px;
-      font-weight: 700;
-      color: #ffffff;
-      margin-bottom: 10px;
-    }}
-    .info-card p {{
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }}
-    .info-card p:last-child {{
-      margin-bottom: 0;
-    }}
-    .badge {{
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-family: ui-monospace, monospace;
-      font-weight: 700;
-    }}
-    .badge-ok {{
-      background: #141414;
-      color: #ffffff;
-      border: 1px solid #444444;
-    }}
-    .cfg-link {{
-      color: #ffffff;
-      cursor: pointer;
-      text-decoration: underline;
-      font-weight: 600;
-    }}
-    .cfg-link:hover {{
-      color: #a3a3a3;
-    }}
-    .cfg-link:focus-visible {{
-      outline: 2px solid #ffffff;
-      outline-offset: 2px;
-    }}
-
-    .footer {{
-      font-size: 11.5px;
-      color: #8a8a8a;
-      font-family: ui-monospace, monospace;
-      letter-spacing: 1px;
-      margin-top: 10px;
-      text-align: center;
-      animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.78s backwards;
-      /* Keeps the engine label readable where the white fire passes beneath it. */
-      text-shadow: 0 0 6px #000000, 0 0 3px rgba(0, 0, 0, 0.9);
-    }}
-
-    /* Motion off: entrance choreography stops; the engine paints ONE frozen
-       digital-flame frame plus a static spark bed, nothing loops. */
+    /* Motion off: entrance choreography stops entirely. */
     @media (prefers-reduced-motion: reduce) {{
-      .hero-logo, .hero h1, .hero p, .quick-card, .info-card, .footer {{
+      .hero-logo, .hero h1, .hero p, .quick-card {{
         animation: none !important;
-      }}
-      #flame-canvas {{
-        transition: none;
       }}
     }}
   </style>
 </head>
 <body>
-  <canvas id="flame-canvas" aria-hidden="true"></canvas>
   <main class="container">
     <!-- Huge Hero Branding -->
     <div class="hero">
@@ -2384,7 +2358,7 @@ def generate_start_page_html(
         <img src="/assets/logo.svg" alt="N0pperabo Logo" class="hero-logo" />
       </div>
       <h1>NTTM</h1>
-      <p>مرورگر آفلاین NTTM بر بستر تانل گیت‌هاب رانر با مخفی‌کاری پیشرفته</p>
+      <p>Offline NTTM browser over the GitHub tunnel with advanced stealth</p>
     </div>
 
     <!-- Search Input Bar -->
@@ -2393,9 +2367,9 @@ def generate_start_page_html(
         <span class="search-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </span>
-        <input type="text" id="start-query" placeholder="جستجو در اینترنت یا وارد کردن آدرس وب‌سایت..." onkeydown="if(event.key==='Enter') doSearch()" />
+        <input type="text" id="start-query" placeholder="Search the web or enter a URL..." onkeydown="if(event.key==='Enter') doSearch()" />
       </div>
-      <button class="btn-search" onclick="doSearch()">جستجو</button>
+      <button class="btn-search" onclick="doSearch()">Search</button>
     </div>
 
     <!-- Fast Access Grid -->
@@ -2438,26 +2412,6 @@ def generate_start_page_html(
       </div>
     </div>
 
-    <!-- Info Grid -->
-    <div class="info-grid">
-      <div class="info-card">
-        <h3>راهنمای حالت‌های کارکرد</h3>
-        <p><strong>حالت مستقیم:</strong> کلیک‌ها و ارسال فرم‌ها بلافاصله به گیت‌هاب ارسال شده و صفحه جدید دریافت می‌شود.</p>
-        <p><strong>حالت دسته‌ای:</strong> اقدامات پشت‌سرهم در صف ثبت شده و همه با هم در یک رانر گیت‌هاب اجرا می‌شوند.</p>
-      </div>
-
-      <div class="info-card">
-        <h3>وضعیت ارتباط با مخزن</h3>
-        <p style="margin-bottom: 6px;"><strong>توکن دسترسی:</strong> <span class="badge badge-ok">{token_status}</span></p>
-        <p style="margin-bottom: 6px;"><strong>مخزن هدف:</strong> <span dir="ltr" style="color:#ffffff; font-family: ui-monospace, monospace;">{repo_status}</span></p>
-        <p style="margin-bottom: 10px;"><strong>کوکی‌های فعال:</strong> <span class="badge badge-ok">{cookies_count} عدد</span></p>
-        <p><a class="cfg-link" role="button" tabindex="0" onclick="parent.window.shellApp.openSettings()">تغییر تنظیمات و کلیدهای ارتباطی</a></p>
-      </div>
-    </div>
-
-    <footer class="footer">
-      N0PPERABO NTTM ENGINE • PURE BLACK STEALTH
-    </footer>
   </main>
 
   <script>
@@ -2486,222 +2440,6 @@ def generate_start_page_html(
         }}
       }});
     }});
-
-    // Ember drift: rising spark particles that complement the real white
-    // fire strip along the bottom edge. Additive compositing (the classic
-    // canvas flame walkthrough technique, thecodeplayer.com / davepagurek.com)
-    // makes overlaps glow, grayscale only to match the N0PPERABO monochrome face.
-    // The main fire lives in .fire-line (CC0 sprite strip, pure CSS playback).
-    // Digital Flame Engine: Procedural layered pyramid flame in white-to-grey spectrum.
-    // Base spans 100% of the screen width, tapering upwards to a graceful apex.
-    (function digitalFlame() {{
-      const canvas = document.getElementById('flame-canvas');
-      if (!canvas || !canvas.getContext) return;
-      const ctx = canvas.getContext('2d');
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      let W = 0, H = 0;
-
-      function resize() {{
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        W = window.innerWidth;
-        H = window.innerHeight;
-        canvas.width = Math.floor(W * dpr);
-        canvas.height = Math.floor(H * dpr);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }}
-      window.addEventListener('resize', resize);
-      resize();
-
-      // Floating spark embers
-      const sparks = [];
-      const SPARK_COUNT = 85;
-      for (let i = 0; i < SPARK_COUNT; i++) {{
-        sparks.push({{
-          x: Math.random() * (W || 1000),
-          y: Math.random() * (H || 800),
-          vx: (Math.random() - 0.5) * 0.7,
-          vy: -(1.2 + Math.random() * 2.2),
-          size: 1.1 + Math.random() * 2.4,
-          alpha: 0.3 + Math.random() * 0.65,
-          life: Math.random() * 120
-        }});
-      }}
-
-      function draw(now) {{
-        ctx.clearRect(0, 0, W, H);
-        const t = now * 0.0018;
-
-        // Pyramid Dimensions: Anchored at base, gracefully peaks below the hero logo
-        const flameHeight = Math.min(H * 0.42, 380);
-        const linesCount = 76;
-        const cx = W / 2;
-
-        // 1. Ambient Base Glow
-        const ambientGrad = ctx.createRadialGradient(cx, H, 20, cx, H - flameHeight * 0.45, W * 0.58);
-        ambientGrad.addColorStop(0, 'rgba(255, 255, 255, 0.09)');
-        ambientGrad.addColorStop(0.28, 'rgba(190, 200, 215, 0.045)');
-        ambientGrad.addColorStop(0.65, 'rgba(70, 80, 95, 0.015)');
-        ambientGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = ambientGrad;
-        ctx.fillRect(0, 0, W, H);
-
-        // 2. Central Flame Tongues (Fluid volumetric fire body)
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const tongues = [
-          {{ scaleH: 0.94, offset: 0, wFactor: 0.24, alpha: 0.22 }},
-          {{ scaleH: 0.84, offset: 2.1, wFactor: 0.38, alpha: 0.16 }},
-          {{ scaleH: 0.72, offset: 4.2, wFactor: 0.54, alpha: 0.11 }}
-        ];
-        tongues.forEach((tg) => {{
-          const topY = H - flameHeight * tg.scaleH;
-          const sway = Math.sin(t * 2.4 + tg.offset) * 28;
-          const tipX = cx + sway;
-          const w = (W * tg.wFactor) * (1 + 0.12 * Math.sin(t * 3.2 + tg.offset));
-
-          ctx.beginPath();
-          ctx.moveTo(cx - w, H);
-          ctx.bezierCurveTo(
-            cx - w * 0.72, H - flameHeight * 0.32,
-            tipX - w * 0.22, H - flameHeight * 0.68,
-            tipX, topY
-          );
-          ctx.bezierCurveTo(
-            tipX + w * 0.22, H - flameHeight * 0.68,
-            cx + w * 0.72, H - flameHeight * 0.32,
-            cx + w, H
-          );
-          ctx.closePath();
-
-          const grad = ctx.createLinearGradient(cx, H, tipX, topY);
-          grad.addColorStop(0, `rgba(255, 255, 255, ${{tg.alpha}})`);
-          grad.addColorStop(0.45, `rgba(210, 220, 235, ${{(tg.alpha * 0.75).toFixed(3)}})`);
-          grad.addColorStop(0.85, `rgba(255, 255, 255, ${{(tg.alpha * 1.3).toFixed(3)}})`);
-          grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-          ctx.fillStyle = grad;
-          ctx.fill();
-        }});
-        ctx.restore();
-
-        // 3. Layered Geometric Wave Lines (Rhythmic digital contour flame)
-        ctx.save();
-        for (let i = 0; i < linesCount; i++) {{
-          const u = i / (linesCount - 1); // 0 at bottom, 1 at peak
-          const y = H - u * flameHeight;
-
-          // Pyramid silhouette: full width at bottom (u=0), tapering to apex (u=1)
-          const taper = Math.pow(1 - u, 1.22);
-          const upwardPhase = t * 3.6 - u * 8.2;
-          const waveSway = Math.sin(upwardPhase * 0.65 + u * 4.2) * (u * 42);
-          const centerLine = cx + waveSway;
-
-          const breath = 1 + 0.14 * Math.sin(upwardPhase * 1.1 + i * 0.22);
-          const halfWidth = (W * 0.53) * taper * breath + (1 - u) * (W * 0.08);
-
-          if (halfWidth < 4) continue;
-
-          const left = centerLine - halfWidth;
-          const right = centerLine + halfWidth;
-
-          ctx.beginPath();
-          const steps = 38;
-          for (let s = 0; s <= steps; s++) {{
-            const frac = s / steps;
-            const px = left + frac * (right - left);
-            const bell = Math.sin(frac * Math.PI);
-
-            const ripple1 = Math.sin(frac * 11.5 + upwardPhase * 2.1) * (6.5 * bell * (1 - u * 0.45));
-            const ripple2 = Math.cos(frac * 23.0 - t * 4.2) * (3.2 * bell * (1 - u * 0.7));
-            const py = y - (ripple1 + ripple2);
-
-            if (s === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }}
-
-          // White-to-Grey Gradient: Blazing white at center/top, silver mid, charcoal edges
-          const lineGrad = ctx.createLinearGradient(left, y, right, y);
-          const edgeLum = Math.floor(45 + 75 * (1 - u));
-          const midLum = Math.floor(185 + 55 * u);
-          const centerLum = 255;
-
-          const alphaCore = Math.min(1.0, 0.45 + 0.55 * u);
-          const alphaMid = 0.32 + 0.38 * u;
-          const alphaEdge = 0.08 + 0.18 * (1 - u);
-
-          lineGrad.addColorStop(0, `rgba(${{edgeLum}}, ${{edgeLum}}, ${{edgeLum}}, ${{alphaEdge.toFixed(3)}})`);
-          lineGrad.addColorStop(0.24, `rgba(${{midLum}}, ${{midLum}}, ${{midLum}}, ${{alphaMid.toFixed(3)}})`);
-          lineGrad.addColorStop(0.5, `rgba(${{centerLum}}, ${{centerLum}}, ${{centerLum}}, ${{alphaCore.toFixed(3)}})`);
-          lineGrad.addColorStop(0.76, `rgba(${{midLum}}, ${{midLum}}, ${{midLum}}, ${{alphaMid.toFixed(3)}})`);
-          lineGrad.addColorStop(1, `rgba(${{edgeLum}}, ${{edgeLum}}, ${{edgeLum}}, ${{alphaEdge.toFixed(3)}})`);
-
-          ctx.strokeStyle = lineGrad;
-          ctx.lineWidth = Math.max(1, 2.7 * (1 - u * 0.6));
-          ctx.stroke();
-
-          // Intense core beam along the pyramid spine
-          if (i % 3 === 0 && u > 0.12) {{
-            ctx.beginPath();
-            const coreSpan = halfWidth * (0.22 + 0.22 * (1 - u));
-            ctx.moveTo(centerLine - coreSpan, y);
-            ctx.lineTo(centerLine + coreSpan, y);
-            ctx.strokeStyle = `rgba(255, 255, 255, ${{(0.65 * (1 - u * 0.25)).toFixed(3)}})`;
-            ctx.lineWidth = Math.max(1, 1.6 * (1 - u * 0.5));
-            ctx.stroke();
-          }}
-        }}
-        ctx.restore();
-
-        // 4. Floating Rising Sparks within Pyramid Bounds
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        sparks.forEach((sp) => {{
-          sp.y += sp.vy;
-          sp.x += sp.vx + Math.sin(t * 3.2 + sp.life * 0.09) * 0.55;
-          sp.life += 1;
-
-          if (sp.y < H - flameHeight * 1.05 || sp.life > 140) {{
-            sp.y = H + 6;
-            sp.x = Math.random() * W;
-            sp.life = 0;
-            sp.vy = -(1.2 + Math.random() * 2.4);
-          }}
-
-          const uSpark = (H - sp.y) / flameHeight;
-          const maxDist = (W * 0.54) * Math.max(0.06, Math.pow(1 - Math.min(1, uSpark), 1.15));
-          const distFromCenter = Math.abs(sp.x - cx);
-
-          if (distFromCenter < maxDist * 1.12) {{
-            const sparkFade = 1 - Math.min(1, sp.life / 140);
-            const sparkAlpha = sp.alpha * sparkFade;
-
-            ctx.fillStyle = `rgba(255, 255, 255, ${{sparkAlpha.toFixed(3)}})`;
-            ctx.beginPath();
-            ctx.arc(sp.x, sp.y, sp.size * sparkFade, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Luminous halo
-            ctx.fillStyle = `rgba(210, 225, 240, ${{(sparkAlpha * 0.38).toFixed(3)}})`;
-            ctx.beginPath();
-            ctx.arc(sp.x, sp.y, sp.size * 2.6 * sparkFade, 0, Math.PI * 2);
-            ctx.fill();
-          }}
-        }});
-        ctx.restore();
-      }}
-
-      canvas.classList.add('on');
-
-      if (!reduced) {{
-        function loop(now) {{
-          requestAnimationFrame(loop);
-          if (document.hidden) return;
-          draw(now);
-        }}
-        requestAnimationFrame(loop);
-      }} else {{
-        draw(1200);
-      }}
-    }})();
   </script>
 </body>
 </html>

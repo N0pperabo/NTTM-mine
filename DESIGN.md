@@ -28,7 +28,7 @@
   - Action / Error: `#ef4444` (Crimson)
 
 ## 4. Typography & Iconography
-- **Body & Controls**: System Sans (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif`)
+- **Body & Controls**: Vazirmatn variable (bundled woff2, OFL license) chosen for a Persian-first UI; fallback system sans (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`)
 - **Technical & Addresses**: Monospace (`ui-monospace, "Cascadia Code", "Fira Code", monospace`)
 - **Icons**: Clean monochrome SVG line vectors, semantic and purpose-bound.
 
@@ -36,3 +36,4 @@
 - **ENERGY**: 2 (Disciplined, steady, focused)
 - **RHYTHM**: 2 (Clear functional zoning between browser controls and web content)
 - **MOTION**: 1 (Immediate hover/active state feedback only; 150ms cubic-bezier transitions; 0 perpetual idle loops)
+- **Start page backdrop (owner-mandated, 2026-11-02)**: halftone dot texture, inverted from the linked reference; black field `#000000` with white dots of varying size on a jittered lattice, occasional blank cells (measured from the reference image). The Digital Flame was removed by owner decision the same day; do not reintroduce it.
