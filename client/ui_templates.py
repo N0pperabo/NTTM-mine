@@ -1978,104 +1978,94 @@ def generate_shell_html() -> str:
                 }
 
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
-                if (!isBatch) {
-                  // Direct Mode: Smart search & Enter submission on standalone inputs without native forms
-                  if (e.key === 'Enter') {
-                    const target = e.target;
-                    if (target && (target.tagName.toLowerCase() === 'input' || target.tagName.toLowerCase() === 'textarea')) {
-                      const form = target.closest('form');
-                      const queryVal = (target.value || '').trim();
-                      if (!queryVal) return;
-
-                      // If inside a traditional HTML form with a server action, allow natural submit
-                      if (form && form.getAttribute('action') && !form.getAttribute('action').startsWith('javascript:')) {
-                        return;
-                      }
-
-                      e.preventDefault();
-                      e.stopPropagation();
-                      flashElement(target);
-
-                      const activeUrl = curUrl || window.location.href;
-
-                      // High-speed direct search routing for major platforms
-                      if (activeUrl.includes('reddit.com')) {
-                        window.parent.shellApp.navigate('https://www.reddit.com/search/?q=' + encodeURIComponent(queryVal));
-                        return false;
-                      }
-                      if (activeUrl.includes('youtube.com')) {
-                        window.parent.shellApp.navigate('https://www.youtube.com/results?search_query=' + encodeURIComponent(queryVal));
-                        return false;
-                      }
-                      if (activeUrl.includes('google.com')) {
-                        window.parent.shellApp.navigate('https://www.google.com/search?q=' + encodeURIComponent(queryVal));
-                        return false;
-                      }
-
-                      // Generic SPA fallback: synthesize Fill + Enter replay action
-                      const info = getElementInfo(target);
-                      const directActions = [
-                        {
-                          type: 'fill',
-                          selector: info.selector,
-                          xpath: info.xpath,
-                          value: queryVal,
-                          name: target.name || target.id || '',
-                          placeholder: target.placeholder || '',
-                          text_hint: info.textHint,
-                          x: info.x,
-                          y: info.y
-                        },
-                        {
-                          type: 'press',
-                          key: 'Enter',
-                          selector: info.selector,
-                          xpath: info.xpath,
-                          x: info.x,
-                          y: info.y
-                        }
-                      ];
-
-                      const delay = window.parent.shellApp.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0;
-                      const scroll = window.parent.shellApp.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
-                      const tab = window.parent.shellApp.getActiveTab();
-
-                      window.parent.shellApp.showLoading('Submitting action to runner...');
-                      if (window.pywebview && window.pywebview.api) {
-                        window.pywebview.api.run_batch_actions(activeUrl, directActions, delay, tab ? tab.id : '', scroll);
-                      }
-                      return false;
-                    }
-                  }
-                  return;
-                }
 
                 if (e.key === 'Enter') {
                   const target = e.target;
                   if (target && (target.tagName.toLowerCase() === 'input' || target.tagName.toLowerCase() === 'textarea')) {
+                    const queryVal = (target.value || '').trim();
+                    if (!queryVal) return;
+
                     e.preventDefault();
                     e.stopPropagation();
+                    flashElement(target);
+
+                    const activeUrl = curUrl || window.location.href;
+
+                    // Direct Search shortcuts for major platforms (instant & 100% reliable)
+                    if (activeUrl.includes('reddit.com') && (target.name === 'q' || target.placeholder?.includes('Search') || target.closest('form, reddit-search-large, faceplate-search-input'))) {
+                      window.parent.shellApp.navigate('https://www.reddit.com/search/?q=' + encodeURIComponent(queryVal));
+                      return false;
+                    }
+                    if (activeUrl.includes('youtube.com') && (target.name === 'search_query' || target.id === 'search' || target.placeholder?.includes('Search'))) {
+                      window.parent.shellApp.navigate('https://www.youtube.com/results?search_query=' + encodeURIComponent(queryVal));
+                      return false;
+                    }
+                    if (activeUrl.includes('google.com') && (target.name === 'q' || target.id === 'APjFqb')) {
+                      window.parent.shellApp.navigate('https://www.google.com/search?q=' + encodeURIComponent(queryVal));
+                      return false;
+                    }
+
+                    // If inside a form, trigger intercepted submit
+                    const form = target.closest('form');
+                    if (form) {
+                      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                      else form.submit();
+                      return false;
+                    }
 
                     const info = getElementInfo(target);
-                    window.parent.shellApp.queueAction({
-                      type: 'fill',
-                      selector: info.selector,
-                      xpath: info.xpath,
-                      value: target.value,
-                      name: target.name || target.id || '',
-                      x: info.x,
-                      y: info.y
-                    });
+                    if (isBatch) {
+                      window.parent.shellApp.queueAction({
+                        type: 'fill',
+                        selector: info.selector,
+                        xpath: info.xpath,
+                        value: queryVal,
+                        name: target.name || target.id || '',
+                        x: info.x,
+                        y: info.y
+                      });
+                      window.parent.shellApp.queueAction({
+                        type: 'press',
+                        key: 'Enter',
+                        selector: info.selector,
+                        xpath: info.xpath,
+                        x: info.x,
+                        y: info.y
+                      });
+                      return false;
+                    }
 
-                    window.parent.shellApp.queueAction({
-                      type: 'press',
-                      key: 'Enter',
-                      selector: info.selector,
-                      xpath: info.xpath,
-                      x: info.x,
-                      y: info.y
-                    });
-                    flashElement(target);
+                    // Standalone input in Direct Mode: dispatch single replay
+                    const directActions = [
+                      {
+                        type: 'fill',
+                        selector: info.selector,
+                        xpath: info.xpath,
+                        value: queryVal,
+                        name: target.name || target.id || '',
+                        placeholder: target.placeholder || '',
+                        text_hint: info.textHint,
+                        x: info.x,
+                        y: info.y
+                      },
+                      {
+                        type: 'press',
+                        key: 'Enter',
+                        selector: info.selector,
+                        xpath: info.xpath,
+                        x: info.x,
+                        y: info.y
+                      }
+                    ];
+
+                    const delay = window.parent.shellApp.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0;
+                    const scroll = window.parent.shellApp.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
+                    const tab = window.parent.shellApp.getActiveTab();
+
+                    window.parent.shellApp.showLoading('Submitting action to runner...');
+                    if (window.pywebview && window.pywebview.api) {
+                      window.pywebview.api.run_batch_actions(activeUrl, directActions, delay, tab ? tab.id : '', scroll);
+                    }
                     return false;
                   }
                 }
@@ -2095,21 +2085,53 @@ def generate_shell_html() -> str:
                 }
               }, { passive: true });
 
-              // --- 5. SUBMIT Interception ---
+              // --- 5. SUBMIT Interception (Direct & Batch Mode) ---
               document.addEventListener('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const form = e.target;
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
+
                 if (isBatch) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const info = getElementInfo(e.target);
+                  const info = getElementInfo(form);
                   window.parent.shellApp.queueAction({
                     type: 'submit',
                     selector: info.selector,
                     xpath: info.xpath
                   });
-                  flashElement(e.target);
+                  flashElement(form);
                   return false;
                 }
+
+                // Direct Mode: Execute form submission safely through shell
+                flashElement(form);
+                const method = (form.getAttribute('method') || 'GET').toUpperCase();
+                const actionAttr = form.getAttribute('action') || '';
+                const targetUrl = actionAttr ? new URL(actionAttr, window.location.href).href : window.location.href;
+
+                const formData = new FormData(form);
+                if (method === 'GET') {
+                  const parsed = new URL(targetUrl);
+                  for (const [k, v] of formData.entries()) {
+                    parsed.searchParams.set(k, v);
+                  }
+                  window.parent.shellApp.navigate(parsed.href);
+                  return false;
+                }
+
+                // POST Form: serialize body and dispatch
+                const params = new URLSearchParams();
+                for (const [k, v] of formData.entries()) {
+                  params.append(k, v);
+                }
+                const bodyBase64 = btoa(unescape(encodeURIComponent(params.toString())));
+                const delay = window.parent.shellApp.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0;
+                const tab = window.parent.shellApp.getActiveTab();
+                if (window.pywebview && window.pywebview.api) {
+                  window.pywebview.api.submit_form(targetUrl, method, 'application/x-www-form-urlencoded', bodyBase64, delay, tab ? tab.id : '');
+                }
+                return false;
               }, true);
             })();
           `;

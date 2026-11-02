@@ -2,9 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import crypto from 'node:crypto';
-import { decryptBytes, encryptBytes, decryptEnvelope, encryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
-import { execSync } from 'node:child_process';
+import { decryptBytes, decryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
 
 const BLOCKED_AD_DOMAINS = [
   'googlesyndication.com',
@@ -105,7 +103,7 @@ async function setupAdBlocker(page, targetUrl) {
 
 async function autoScrollPage(page, delaySec = 0, scrollSteps = 3) {
   try {
-    console.log(`[Daemon] Auto-scrolling page (steps: ${scrollSteps})...`);
+    console.log(`[Runner] Auto-scrolling page (steps: ${scrollSteps})...`);
     await page.evaluate(async ({ delay, steps }) => {
       await new Promise((resolve) => {
         let totalHeight = 0;
@@ -149,7 +147,7 @@ async function autoScrollPage(page, delaySec = 0, scrollSteps = 3) {
       window.dispatchEvent(new Event('scroll'));
     }).catch(() => {});
   } catch (e) {
-    console.warn('[Daemon] Auto-scroll warning:', e.message);
+    console.warn('[Runner] Auto-scroll warning:', e.message);
   }
 }
 
@@ -239,248 +237,45 @@ async function autoJanitorCleanupReleases(token = process.env.GITHUB_TOKEN || pr
   }
 }
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
-const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || '';
-const IDLE_TIMEOUT_MIN = parseFloat(process.env.IDLE_TIMEOUT_MINUTES || '30');
-const MAX_RUN_HOURS = parseFloat(process.env.MAX_HOURS || '5.5');
-const AUTO_CHAIN = (process.env.AUTO_CHAIN || 'true').toLowerCase() === 'true';
-const BRANCH = process.env.BRANCH || 'main';
-const ENCRYPTION_KEY = (process.env.ENCRYPTION_KEY || '').trim();
-
-const API_BASE = 'https://api.github.com';
-const POLL_INTERVAL_MS = 1000;
-
-function getHeaders() {
-  return {
-    'Accept': 'application/vnd.github+json',
-    'Authorization': `Bearer ${GITHUB_TOKEN}`,
-    'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'GitHub-Offline-Browser-Daemon'
-  };
-}
-
-async function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function listPendingRequests() {
-  if (!GITHUB_REPOSITORY) return [];
-  const url = `${API_BASE}/repos/${GITHUB_REPOSITORY}/contents/requests`;
-  try {
-    const res = await fetch(url, { headers: getHeaders() });
-    if (res.status === 200) {
-      const items = await res.json();
-      if (Array.isArray(items)) {
-        return items.filter((i) => i.name.endsWith('.json') && i.type === 'file');
-      }
-    } else if (res.status === 404) {
-      return [];
-    } else {
-      console.warn(`[Daemon] List requests returned HTTP ${res.status}`);
-    }
-  } catch (err) {
-    console.warn(`[Daemon] Error fetching requests list:`, err.message);
-  }
-  return [];
-}
-
-async function deleteRequestFile(filePath, sha) {
-  const url = `${API_BASE}/repos/${GITHUB_REPOSITORY}/contents/${filePath}`;
-  try {
-    const res = await fetch(url, {
-      method: 'DELETE',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        message: 'chore(ci): update sync state',
-        sha: sha,
-        branch: BRANCH
-      })
-    });
-    return res.status === 200;
-  } catch (err) {
-    console.error(`[Daemon] Failed to delete ${filePath}:`, err.message);
-    return false;
-  }
-}
-
-async function triggerNextWorker() {
-  console.log('[Daemon] Max run time approaching. Spawning successor daemon worker...');
-  const url = `${API_BASE}/repos/${GITHUB_REPOSITORY}/actions/workflows/daemon.yml/dispatches`;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({
-        ref: BRANCH,
-        inputs: {
-          idle_timeout_minutes: String(IDLE_TIMEOUT_MIN),
-          max_hours: String(MAX_RUN_HOURS),
-          auto_chain: 'true'
-        }
-      })
-    });
-    if (res.status === 204 || res.status === 200) {
-      console.log('[Daemon] Successor worker spawned successfully!');
-    } else {
-      console.warn(`[Daemon] Spawn successor returned HTTP ${res.status}`);
-    }
-  } catch (err) {
-    console.error('[Daemon] Error spawning successor worker:', err.message);
-  }
-}
-
 async function main() {
-  console.log('====================================================');
-  console.log('🚀 GitHub Offline Browser: Daemon Worker Started');
-  console.log(`Repository: ${GITHUB_REPOSITORY}`);
-  console.log(`Max Run Time: ${MAX_RUN_HOURS} hours`);
-  console.log(`Idle Timeout: ${IDLE_TIMEOUT_MIN} minutes`);
-  console.log(`Auto Chain: ${AUTO_CHAIN}`);
-  console.log('====================================================');
-
-  const startTime = Date.now();
-  let lastActivityTime = Date.now();
-  const maxRunMs = MAX_RUN_HOURS * 3600 * 1000;
-  const idleTimeoutMs = IDLE_TIMEOUT_MIN * 60 * 1000;
-
-  // 1. Launch persistent Playwright Chromium browser in memory
-  let chromium;
-  try {
-    const pw = await import('playwright');
-    chromium = pw.chromium;
-  } catch (e) {
-    console.error('Playwright not found:', e);
+  const requestId = process.argv[2] || process.env.REQUEST_ID;
+  if (!requestId) {
+    console.error('Error: REQUEST_ID not provided.');
     process.exit(1);
   }
 
-  console.log('[Daemon] Initializing persistent hot Chromium browser...');
-  const browser = await chromium.launch({
-    headless: true,
-    ignoreDefaultArgs: ['--enable-automation'],
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-web-security',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-infobars',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--window-size=1920,1080',
-      '--start-maximized',
-      '--lang=en-US,en'
-    ]
-  });
-  console.log('[Daemon] 🚀 Hot Playwright Chromium browser online and ready!');
-
-  try {
-    while (true) {
-      const now = Date.now();
-
-      // Check max run time handoff
-      if (now - startTime >= maxRunMs) {
-        console.log(`[Daemon] Worker has run for ${MAX_RUN_HOURS} hours.`);
-        if (AUTO_CHAIN) {
-          await triggerNextWorker();
-        }
-        break;
-      }
-
-      // Check idle timeout
-      if (now - lastActivityTime >= idleTimeoutMs) {
-        console.log(`[Daemon] No requests received for ${IDLE_TIMEOUT_MIN} minutes. Conserving Action quota and shutting down.`);
-        break;
-      }
-
-      // Check pending requests
-      const pendingItems = await listPendingRequests();
-      if (pendingItems.length > 0) {
-        // Sort items by name (timestamp is in name: timestamp_rand.json)
-        pendingItems.sort((a, b) => a.name.localeCompare(b.name));
-        const item = pendingItems[0];
-        const requestId = item.name.replace(/\.json$/i, '');
-
-        console.log(`\n----------------------------------------------------`);
-        console.log(`[Daemon] ⚡ Processing request: ${requestId} (${item.path})`);
-        console.log(`----------------------------------------------------`);
-
-        // Fetch request envelope
-        let requestData = null;
-        try {
-          let rawBuffer;
-          if (item.download_url) {
-            const reqRes = await fetch(item.download_url, { headers: getHeaders() });
-            rawBuffer = Buffer.from(await reqRes.arrayBuffer());
-          } else {
-            const fileMeta = await (await fetch(item.url, { headers: getHeaders() })).json();
-            rawBuffer = Buffer.from(fileMeta.content, 'base64');
-          }
-
-          let jsonText;
-          if (isEncrypted(rawBuffer)) {
-            console.log('[Daemon] 🔒 Request envelope is encrypted with AES-256-GCM. Decrypting...');
-            const dec = decryptEnvelope(rawBuffer, ENCRYPTION_KEY);
-            jsonText = dec.toString('utf8');
-          } else {
-            jsonText = rawBuffer.toString('utf8');
-          }
-          requestData = JSON.parse(jsonText);
-        } catch (err) {
-          console.error(`[Daemon] Error loading or decrypting request envelope: ${err.message}`);
-          await deleteRequestFile(item.path, item.sha);
-          continue;
-        }
-
-        // Process request with hot browser
-        const workDir = path.join(process.cwd(), 'work');
-        if (fs.existsSync(workDir)) {
-          fs.rmSync(workDir, { recursive: true, force: true });
-        }
-        fs.mkdirSync(workDir, { recursive: true });
-
-        try {
-          await processRequest(browser, requestData, requestId, workDir);
-          await packageAndRelease(requestId, workDir);
-        } catch (procErr) {
-          console.error(`[Daemon] Processing error:`, procErr);
-          writeErrorArtifacts(workDir, requestId, procErr.message);
-          await packageAndRelease(requestId, workDir);
-        }
-
-        // Delete processed request envelope
-        console.log(`[Daemon] Cleaning up request envelope ${item.path}...`);
-        await deleteRequestFile(item.path, item.sha);
-
-        // Reset idle timer
-        lastActivityTime = Date.now();
-        console.log(`[Daemon] ✅ Request ${requestId} completed! Returning to standby mode.`);
-
-        // Clean work dir
-        if (fs.existsSync(workDir)) {
-          fs.rmSync(workDir, { recursive: true, force: true });
-        }
-
-        // Loop immediately in case more requests are queued
-        continue;
-      }
-
-      // Sleep before polling again
-      await sleep(POLL_INTERVAL_MS);
-    }
-  } finally {
-    console.log('[Daemon] Closing browser and exiting worker.');
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
-    // Clean up old releases
-    await autoJanitorCleanupReleases(GITHUB_TOKEN, GITHUB_REPOSITORY).catch(() => {});
-  }
-}
-
-async function processRequest(browser, requestData, requestId, workDir) {
+  const cwd = process.cwd();
+  const requestFilePath = path.join(cwd, 'requests', `${requestId}.json`);
+  const workDir = path.join(cwd, 'work');
   const downloadDir = path.join(workDir, 'download');
+
+  fs.mkdirSync(workDir, { recursive: true });
   fs.mkdirSync(downloadDir, { recursive: true });
+
+  if (!fs.existsSync(requestFilePath)) {
+    console.error(`Request envelope not found at: ${requestFilePath}`);
+    writeErrorArtifacts(workDir, requestId, `Request envelope not found: ${requestFilePath}`);
+    return;
+  }
+
+  let requestData;
+  const encryptionKey = (process.env.ENCRYPTION_KEY || '').trim();
+  try {
+    const fileBuf = fs.readFileSync(requestFilePath);
+    let jsonText;
+    if (isEncrypted(fileBuf)) {
+      console.log('[Runner] 🔒 Request envelope is encrypted with AES-256-GCM. Decrypting...');
+      const decBuf = decryptEnvelope(fileBuf, encryptionKey);
+      jsonText = decBuf.toString('utf8');
+    } else {
+      jsonText = fileBuf.toString('utf8');
+    }
+    requestData = JSON.parse(jsonText);
+  } catch (err) {
+    console.error('[Runner] Error parsing or decrypting request envelope:', err.message);
+    writeErrorArtifacts(workDir, requestId, `Invalid or encrypted request: ${err.message}`);
+    return;
+  }
 
   const {
     target_url,
@@ -499,7 +294,44 @@ async function processRequest(browser, requestData, requestId, workDir) {
     scroll_steps = 0
   } = requestData;
 
-  const context = await browser.newContext({
+  console.log(`[Runner] Processing request ${requestId} in mode: ${mode}`);
+
+  let browser;
+  let downloadedFile = null;
+  let actionsExecuted = 0;
+  let finalUrl = target_url;
+  let pageTitle = '';
+  let httpStatus = 200;
+
+  try {
+    let chromium;
+    try {
+      const pw = await import('playwright');
+      chromium = pw.chromium;
+    } catch (e) {
+      throw new Error(`Playwright dependency not found. Please run 'npm install playwright': ${e.message}`);
+    }
+
+    browser = await chromium.launch({
+      headless: true,
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-blink-features=AutomationControlled',
+        '--disable-infobars',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--window-size=1920,1080',
+        '--start-maximized',
+        '--lang=en-US,en'
+      ]
+    });
+
+    const contextOptions = {
     viewport: {
       width: viewport.width || 1920,
       height: viewport.height || 1080
@@ -515,14 +347,14 @@ async function processRequest(browser, requestData, requestId, workDir) {
       ...custom_headers
     },
     acceptDownloads: true
-  });
+  };
 
-  if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
-    const validCookies = storage_state.cookies.filter(c => c && c.name && c.value && (c.domain || c.url));
-    if (validCookies.length > 0) {
-      await context.addCookies(validCookies).catch(() => {});
+    // Hydrate storage state (cookies + localStorage)
+    if (storage_state && (storage_state.cookies?.length || storage_state.origins?.length)) {
+      contextOptions.storageState = sanitizeStorageState(storage_state);
     }
-  }
+
+    const context = await browser.newContext(contextOptions);
     // Comprehensive Anti-Bot Stealth Masking
     await context.addInitScript(() => {
       try {
@@ -585,13 +417,8 @@ async function processRequest(browser, requestData, requestId, workDir) {
       } catch (e) {}
     });
 
-  let downloadedFile = null;
-  let actionsExecuted = 0;
-  let finalUrl = target_url;
-  let pageTitle = '';
-  let httpStatus = 200;
 
-  try {
+    // Hydrate sessionStorage via init script
     if (session_storage && typeof session_storage === 'object' && Object.keys(session_storage).length > 0) {
       await context.addInitScript((storageMap) => {
         try {
@@ -603,10 +430,13 @@ async function processRequest(browser, requestData, requestId, workDir) {
               }
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('SessionStorage injection warning:', e);
+        }
       }, session_storage);
     }
 
+    // Set custom headers
     if (custom_headers && Object.keys(custom_headers).length > 0) {
       await context.setExtraHTTPHeaders(custom_headers);
     }
@@ -621,6 +451,9 @@ async function processRequest(browser, requestData, requestId, workDir) {
     const imageMap = new Map();
     const cssMap = new Map();
     const fontMap = new Map();
+    let totalImageBytes = 0;
+    const MAX_TOTAL_IMAGE_BYTES = 16 * 1024 * 1024; // 16 MB max for entire page image cache
+    const MAX_SINGLE_IMAGE_BYTES = 1.5 * 1024 * 1024; // 1.5 MB max per image
 
     page.on('response', async (res) => {
       try {
@@ -632,9 +465,9 @@ async function processRequest(browser, requestData, requestId, workDir) {
           /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(url) ||
           /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(reqUrl);
 
-        if (isImg) {
+        if (isImg && totalImageBytes < MAX_TOTAL_IMAGE_BYTES) {
           const buffer = await res.body();
-          if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
+          if (buffer && buffer.length > 0 && buffer.length <= MAX_SINGLE_IMAGE_BYTES) {
             let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
             if (!mime || mime.includes('octet-stream')) {
               if (url.includes('.png') || reqUrl.includes('.png')) mime = 'image/png';
@@ -648,6 +481,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
             imageMap.set(reqUrl, dataUrl);
             imageMap.set(url.split('?')[0], dataUrl);
             imageMap.set(reqUrl.split('?')[0], dataUrl);
+            totalImageBytes += buffer.length;
           }
         } else if (ct.includes('text/css') || url.endsWith('.css') || url.includes('.css?')) {
           const text = await res.text();
@@ -669,7 +503,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
       } catch (e) {}
     });
 
-    page.on('download'  , async (download) => {
+    page.on('download' , async (download) => {
       try {
         const filename = download.suggestedFilename() || `download_${Date.now()}`;
         const savePath = path.join(downloadDir, filename);
@@ -681,161 +515,257 @@ async function processRequest(browser, requestData, requestId, workDir) {
           size: stats.size,
           mime_type: 'application/octet-stream'
         };
+        console.log(`[Runner] Download captured: ${filename} (${stats.size} bytes)`);
       } catch (err) {
-        console.error('[Daemon] Download save error:', err);
+        console.error('[Runner] Download save error:', err);
       }
     });
 
+    // Check if initial request needs POST routing with body
     if (http_method === 'POST' || (body_base64 && body_base64.length > 0)) {
       await page.route(target_url, async (route) => {
         const req = route.request();
         if (req.isNavigationRequest()) {
           const postData = body_base64 ? Buffer.from(body_base64, 'base64') : Buffer.from('');
           const headers = { ...req.headers(), ...custom_headers };
-          if (content_type) headers['content-type'] = content_type;
-          await route.continue({ method: http_method || 'POST', postData, headers });
+          if (content_type) {
+            headers['content-type'] = content_type;
+          }
+          await route.continue({
+            method: http_method || 'POST',
+            postData,
+            headers
+          });
         } else {
           await route.continue();
         }
       });
     }
 
+    // Execute based on mode
     if (mode === 'replay') {
-      const resp = await page.goto(target_url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null);
-      if (resp) httpStatus = resp.status();
-      await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+      console.log(`[Runner] Executing replay mode on: ${target_url}`);
+      const mainResponse = await page.goto(target_url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 45000
+      }).catch((e) => {
+        console.warn('[Runner] Navigation warning:', e.message);
+        return null;
+      });
 
-      for (let i = 0; i < actions.length; i++) {
-        const act = actions[i];
-        try {
-          const el = await resolveElement(page, act);
-          if (act.type === 'fill') {
-            if (el) await el.fill(act.value || '');
-            else if (act.x !== undefined && act.y !== undefined) {
-              await page.mouse.click(act.x, act.y);
-              await page.keyboard.type(act.value || '');
-            }
-          } else if (act.type === 'shorts_next') {
-            let advancedShort = false;
-            const nextBtnSelectors = [
-              '#navigation-button-down button',
-              'ytd-shorts #navigation-button-down button',
-              'button[aria-label*="Next"]',
-              'button[aria-label*="بعدی"]',
-              '#shorts-container #navigation-button-down',
-              'ytd-reel-video-renderer[is-active] + ytd-reel-video-renderer'
-            ];
-            for (const sel of nextBtnSelectors) {
-              try {
-                const btn = page.locator(sel).first();
-                if ((await btn.count()) > 0 && (await btn.isVisible())) {
-                  await btn.click({ timeout: 3500 });
-                  advancedShort = true;
-                  break;
-                }
-              } catch(e) {}
-            }
-            if (!advancedShort) {
-              try {
-                const container = page.locator('#shorts-container, ytd-shorts, body').first();
-                await container.hover().catch(() => {});
-                await page.mouse.wheel(0, 950);
-                await page.keyboard.press('ArrowDown');
-                await page.keyboard.press('PageDown');
-              } catch(e) {}
-            }
-            const oldShortUrl = page.url();
-            await page.waitForTimeout(2000);
-            await page.waitForFunction((old) => window.location.href !== old, oldShortUrl, { timeout: 6000 }).catch(() => {});
-            await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
-            await page.waitForTimeout(1000);
-          } else if (act.type === 'click') {
-            let clicked = false;
-            if (el) {
-              try {
-                await el.click({ timeout: 3500 });
-                clicked = true;
-              } catch (err1) {
-                console.warn(`[Daemon] Normal click failed (${err1.message.slice(0, 80)}), trying force click...`);
-              }
-
-              if (!clicked) {
-                try {
-                  await el.click({ force: true, timeout: 2000 });
-                  clicked = true;
-                } catch (err2) {
-                  console.warn(`[Daemon] Force click failed, trying DOM dispatchEvent...`);
-                }
-              }
-
-              if (!clicked) {
-                try {
-                  await el.dispatchEvent('click');
-                  clicked = true;
-                } catch (err3) {}
-              }
-            }
-
-            if (!clicked && act.href) {
-              await page.goto(act.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-              clicked = true;
-            }
-
-            if (!clicked && act.x !== undefined && act.y !== undefined) {
-              await page.mouse.click(act.x, act.y).catch(() => {});
-              clicked = true;
-            }
-
-            await page.waitForTimeout(1000);
-            await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
-          } else if (act.type === 'submit') {
-            if (el) {
-              await el.evaluate((f) => {
-                if (typeof f.requestSubmit === 'function') f.requestSubmit();
-                else f.submit();
-              }).catch(async () => {
-                await el.press('Enter').catch(() => {});
-              });
-            } else {
-              await page.keyboard.press('Enter');
-            }
-            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
-          } else if (act.type === 'select') {
-            if (el) await el.selectOption(act.value || '');
-          } else if (act.type === 'check') {
-            if (el) await el.setChecked(!!act.checked);
-          } else if (act.type === 'press') {
-            if (el) await el.press(act.key || 'Enter');
-            else await page.keyboard.press(act.key || 'Enter');
-            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
-          } else if (act.type === 'wait') {
-            await page.waitForTimeout(act.wait_after_ms || 1000);
-          } else if (act.type === 'scroll') {
-            await page.mouse.wheel(0, act.y || 300);
-          }
-          if (act.wait_after_ms) await page.waitForTimeout(act.wait_after_ms);
-          actionsExecuted++;
-        } catch (e) {}
+      if (mainResponse) {
+        httpStatus = mainResponse.status();
       }
 
+      await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+
+      // Replay actions sequentially
+      for (let i = 0; i < actions.length; i++) {
+        const action = actions[i];
+        console.log(`[Runner] Action ${i + 1}/${actions.length}: ${action.type}`);
+        try {
+          const el = await resolveElement(page, action);
+
+          switch (action.type) {
+            case 'fill':
+              if (el) {
+                await el.fill(action.value || '');
+              } else if (action.x !== undefined && action.y !== undefined) {
+                await page.mouse.click(action.x, action.y);
+                await page.keyboard.type(action.value || '');
+              }
+              break;
+
+            case 'shorts_next':
+              console.log('[Runner] Navigating to next YouTube Short...');
+              let advancedShort = false;
+              const nextBtnSelectors = [
+                '#navigation-button-down button',
+                'ytd-shorts #navigation-button-down button',
+                'button[aria-label*="Next"]',
+                'button[aria-label*="بعدی"]',
+                '#shorts-container #navigation-button-down',
+                'ytd-reel-video-renderer[is-active] + ytd-reel-video-renderer'
+              ];
+              for (const sel of nextBtnSelectors) {
+                try {
+                  const btn = page.locator(sel).first();
+                  if ((await btn.count()) > 0 && (await btn.isVisible())) {
+                    await btn.click({ timeout: 3500 });
+                    advancedShort = true;
+                    console.log(`[Runner] Clicked Shorts next button via: ${sel}`);
+                    break;
+                  }
+                } catch(e) {}
+              }
+              if (!advancedShort) {
+                try {
+                  const container = page.locator('#shorts-container, ytd-shorts, body').first();
+                  await container.hover().catch(() => {});
+                  await page.mouse.wheel(0, 950);
+                  await page.keyboard.press('ArrowDown');
+                  await page.keyboard.press('PageDown');
+                  console.log('[Runner] Scrolled mouse wheel & pressed ArrowDown on Shorts container');
+                } catch(e) {}
+              }
+              const oldShortUrl = page.url();
+              await page.waitForTimeout(2000);
+              await page.waitForFunction((old) => window.location.href !== old, oldShortUrl, { timeout: 6000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+              await page.waitForTimeout(1000);
+              break;
+
+            case 'click':
+              let clicked = false;
+              if (el) {
+                try {
+                  await el.click({ timeout: 3500 });
+                  clicked = true;
+                } catch (err1) {
+                  console.warn(`[Runner] Normal click failed (${err1.message.slice(0, 80)}), trying force click...`);
+                }
+
+                if (!clicked) {
+                  try {
+                    await el.click({ force: true, timeout: 2000 });
+                    clicked = true;
+                  } catch (err2) {
+                    console.warn(`[Runner] Force click failed, trying DOM dispatchEvent...`);
+                  }
+                }
+
+                if (!clicked) {
+                  try {
+                    await el.dispatchEvent('click');
+                    clicked = true;
+                  } catch (err3) {}
+                }
+              }
+
+              if (!clicked && action.href) {
+                console.log(`[Runner] Click target not found, navigating directly to action.href: ${action.href}`);
+                await page.goto(action.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+                clicked = true;
+              }
+
+              if (!clicked && action.x !== undefined && action.y !== undefined) {
+                await page.mouse.click(action.x, action.y).catch(() => {});
+                clicked = true;
+              }
+
+              await page.waitForTimeout(1000);
+              await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+              break;
+
+            case 'submit':
+              if (el) {
+                await el.evaluate((f) => {
+                  if (typeof f.requestSubmit === 'function') f.requestSubmit();
+                  else f.submit();
+                }).catch(async () => {
+                  await el.press('Enter').catch(() => {});
+                });
+              } else {
+                await page.keyboard.press('Enter');
+              }
+              await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+              break;
+
+            case 'select':
+              if (el) {
+                await el.selectOption(action.value || '');
+              }
+              break;
+
+            case 'check':
+              if (el) {
+                await el.setChecked(!!action.checked);
+              }
+              break;
+
+            case 'press':
+              if (el) {
+                await el.press(action.key || 'Enter');
+                if (action.key === 'Enter') {
+                  await el.evaluate((node) => {
+                    const form = node.closest('form');
+                    if (form) {
+                      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                      else form.submit();
+                    }
+                  }).catch(() => {});
+                }
+              } else {
+                await page.keyboard.press(action.key || 'Enter');
+              }
+              await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+              break;
+
+            case 'wait':
+              await page.waitForTimeout(action.wait_after_ms || 1000);
+              break;
+
+            case 'scroll':
+              await page.mouse.wheel(0, action.y || 300);
+              break;
+
+            default:
+              console.warn(`[Runner] Unknown action type: ${action.type}`);
+          }
+
+          if (action.wait_after_ms) {
+            await page.waitForTimeout(action.wait_after_ms);
+          }
+          actionsExecuted++;
+        } catch (actErr) {
+          console.warn(`[Runner] Action ${i + 1} (${action.type}) failed:`, actErr.message);
+        }
+      }
+
+      // If action replay failed or was empty and AJAX fallback is available
       if (actionsExecuted === 0 && intercepted_ajax?.captured) {
+        console.log('[Runner] Attempting AJAX fallback inside page context...');
         await executeAjaxFallback(page, intercepted_ajax);
       }
     } else if (mode === 'ajax_fallback' && intercepted_ajax?.captured) {
+      console.log(`[Runner] Navigating to page context for AJAX fallback: ${target_url}`);
       await page.goto(target_url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => {});
       await executeAjaxFallback(page, intercepted_ajax);
     } else {
-      const resp = await page.goto(target_url, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => null);
-      if (resp) {
-        httpStatus = resp.status();
-        const headers = resp.headers();
+      // mode: navigate, form, download
+      console.log(`[Runner] Navigating directly to: ${target_url}`);
+      const mainResponse = await page.goto(target_url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 45000
+      }).catch((e) => {
+        console.warn('[Runner] Direct navigation error:', e.message);
+        return null;
+      });
+
+      if (mainResponse) {
+        httpStatus = mainResponse.status();
+        const headers = mainResponse.headers();
         const contentTypeHeader = headers['content-type'] || '';
         const disposition = headers['content-disposition'] || '';
-        if (disposition.toLowerCase().includes('attachment') || isBinaryMime(contentTypeHeader)) {
-          const buffer = await resp.body();
+
+        // Check if response is an attachment or binary file
+        const isAttachment = disposition.toLowerCase().includes('attachment');
+        const isBinary = isBinaryMime(contentTypeHeader);
+
+        if (isAttachment || isBinary) {
+          console.log('[Runner] Detected binary/attachment response directly from response headers.');
+          const buffer = await mainResponse.body();
           let filename = 'downloaded_file';
           const match = disposition.match(/filename\*?=['"]?(?:UTF-8'')?([^'";\n]+)['"]?/i);
-          if (match && match[1]) filename = decodeURIComponent(match[1]);
+          if (match && match[1]) {
+            filename = decodeURIComponent(match[1]);
+          } else {
+            const parsedUrl = new URL(target_url);
+            const pathBase = path.basename(parsedUrl.pathname);
+            if (pathBase && pathBase.includes('.')) {
+              filename = pathBase;
+            }
+          }
           const filePath = path.join(downloadDir, filename);
           fs.writeFileSync(filePath, buffer);
           downloadedFile = {
@@ -846,6 +776,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
           };
         }
       }
+
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     }
 
@@ -866,21 +797,30 @@ async function processRequest(browser, requestData, requestId, workDir) {
     const delaySec = parseInt(custom_delay_seconds || 0, 10);
     if (shouldAutoScroll) {
       const steps = parseInt(rawScrollSteps || (typeof rawAutoScroll === 'number' ? rawAutoScroll : 3), 10) || 3;
-      console.log(`[Daemon] 📜 Auto-scroll active (steps: ${steps}, delay: ${delaySec}s)...`);
+      console.log(`[Runner] 📜 Auto-scroll active (steps: ${steps}, delay: ${delaySec}s)...`);
       await autoScrollPage(page, delaySec, steps);
     } else if (delaySec > 0) {
-      console.log(`[Daemon] ⏱️ Custom delay ${delaySec}s active (auto-scroll disabled)...`);
+      console.log(`[Runner] ⏱️ Custom delay ${delaySec}s active (auto-scroll disabled)...`);
       await page.waitForTimeout(delaySec * 1000);
     }
 
+    // Wait a brief moment for any pending download event to register
     await page.waitForTimeout(1000);
+
     finalUrl = page.url() || target_url;
     pageTitle = await page.title().catch(() => '');
 
-    const currentStorage = await context.storageState().catch(() => ({ cookies: [], origins: [] }));
-    fs.writeFileSync(path.join(workDir, 'storage_state.json'), JSON.stringify(currentStorage, null, 2), 'utf8');
+    // Export storage state (cookies + localStorage)
+    const currentStorageState = await context.storageState().catch(() => ({ cookies: [], origins: [] }));
+    fs.writeFileSync(
+      path.join(workDir, 'storage_state.json'),
+      JSON.stringify(currentStorageState, null, 2),
+      'utf8'
+    );
 
+    // Save webpage if not a file download
     if (!downloadedFile) {
+      console.log('[Runner] Serializing rendered DOM snapshot...');
       let serializedHtml = '';
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -890,7 +830,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
           break;
         } catch (evalErr) {
           if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
-            console.log(`[Daemon] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
+            console.log(`[Runner] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
             await page.waitForTimeout(3000);
             await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
             await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
@@ -905,6 +845,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
       const indexPath = path.join(workDir, 'index.html');
       fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
+      const fileSize = fs.statSync(indexPath).size;
       const meta = {
         request_id: requestId,
         status: 'success',
@@ -915,12 +856,14 @@ async function processRequest(browser, requestData, requestId, workDir) {
         title: pageTitle || 'Offline Webpage',
         actions_executed: actionsExecuted,
         download_filename: '',
-        file_size: fs.statSync(indexPath).size,
+        file_size: fileSize,
         mime_type: 'text/html',
         error_message: ''
       };
       fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+      console.log(`[Runner] Page captured successfully. Size: ${fileSize} bytes.`);
     } else {
+      console.log(`[Runner] File download recorded: ${downloadedFile.filename}`);
       const meta = {
         request_id: requestId,
         status: 'success',
@@ -937,105 +880,19 @@ async function processRequest(browser, requestData, requestId, workDir) {
       };
       fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
     }
+  } catch (err) {
+    console.error('[Runner] Unhandled execution error:', err);
+    writeErrorArtifacts(workDir, requestId, err.message, target_url);
   } finally {
-    await context.close().catch(() => {});
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+    // Clean up old releases
+    await autoJanitorCleanupReleases(process.env.GITHUB_TOKEN, process.env.GITHUB_REPOSITORY).catch(() => {});
   }
 }
 
-async function packageAndRelease(requestId, workDir) {
-  const cwd = process.cwd();
-  const payloadZip = path.join(cwd, 'payload.zip');
-  if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
-
-  // Clean old parts
-  fs.readdirSync(cwd).filter((f) => f.startsWith('payload.zip.part')).forEach((f) => fs.unlinkSync(path.join(cwd, f)));
-
-  // Ensure workDir is not empty before zipping
-  const filesInWork = fs.existsSync(workDir) ? fs.readdirSync(workDir) : [];
-  if (filesInWork.length === 0) {
-    writeErrorArtifacts(workDir, requestId, 'Empty work directory produced');
-  }
-
-  // Fast zipping of work directory (cross-platform)
-  if (process.platform === 'win32') {
-    execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Fastest, $false)"`, { stdio: 'ignore' });
-  } else {
-    execSync(`cd "${workDir}" && zip -q -1 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
-  }
-
-  // Mandatory AES-256-GCM encryption of payload.zip using effective key
-  let zipBuffer = fs.readFileSync(payloadZip);
-  const effectiveKey = getEffectiveKey(ENCRYPTION_KEY);
-  console.log('[Daemon] 🔒 Encrypting payload.zip with AES-256-GCM (Protecting pages, sessions & downloaded files)...');
-  const encZip = encryptBytes(zipBuffer, effectiveKey);
-  fs.writeFileSync(payloadZip, encZip);
-  zipBuffer = encZip;
-  console.log('[Daemon] ✅ Payload encrypted successfully with AES-256-GCM! Size:', zipBuffer.length);
-
-  // Split into 50MB chunks with in-flight SHA-256 calculation (Zero-redundancy I/O)
-  const CHUNK_SIZE = 52428800;
-  let partIndex = 1;
-  const parts = [];
-  for (let offset = 0; offset < zipBuffer.length; offset += CHUNK_SIZE) {
-    const chunk = zipBuffer.subarray(offset, Math.min(offset + CHUNK_SIZE, zipBuffer.length));
-    const partName = `payload.zip.part${String(partIndex).padStart(3, '0')}`;
-    fs.writeFileSync(path.join(cwd, partName), chunk);
-    const partSha = crypto.createHash('sha256').update(chunk).digest('hex');
-    parts.push({
-      filename: partName,
-      size: chunk.length,
-      sha256: partSha
-    });
-    partIndex++;
-  }
-
-  // Generate manifest
-  const fullBuf = zipBuffer;
-  const fullSha256 = crypto.createHash('sha256').update(fullBuf).digest('hex');
-  const manifest = {
-    request_id: requestId,
-    total_size: fullBuf.length,
-    full_sha256: fullSha256,
-    parts
-  };
-
-  const manifestPath = path.join(cwd, 'manifest.json');
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
-
-  // Create GitHub Release using gh CLI
-  const tag = `res-${requestId}`;
-  execSync(`gh release delete "${tag}" --yes 2>/dev/null || true`, { stdio: 'ignore' });
-  execSync(`git push --delete origin "${tag}" 2>/dev/null || true`, { stdio: 'ignore' });
-  execSync(`git tag -d "${tag}" 2>/dev/null || true`, { stdio: 'ignore' });
-
-  console.log(`[Daemon] Creating release ${tag} and uploading ${parts.length} chunk(s)...`);
-  execSync(`gh release create "${tag}" payload.zip.part* --target "${BRANCH}" --title "Response ${tag}" --notes "build: sync cache manifest"`, {
-    stdio: 'inherit',
-    env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
-  });
-
-  console.log(`[Daemon] Uploading manifest.json as completion signal...`);
-  execSync(`gh release upload "${tag}" "${manifestPath}"`, {
-    stdio: 'inherit',
-    env: { ...process.env, GH_TOKEN: GITHUB_TOKEN }
-  });
-
-  // Clean up old releases
-  await autoJanitorCleanupReleases(GITHUB_TOKEN, GITHUB_REPOSITORY).catch(() => {});
-
-  // Cleanup local zip and parts safely
-  try {
-    if (fs.existsSync(payloadZip)) fs.unlinkSync(payloadZip);
-    parts.forEach((p) => {
-      const fp = path.join(cwd, p.filename);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    });
-    if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
-  } catch (cleanErr) {
-    console.warn('[Daemon] Cleanup warning:', cleanErr.message);
-  }
-}
-
+// Fallback chain for element resolution with visible-first prioritization
 async function resolveElement(page, action) {
   async function pickVisibleOrFirst(loc) {
     try {
@@ -1122,7 +979,7 @@ async function resolveElement(page, action) {
     } catch {}
   }
 
-  // 7. Href
+  // 7. Href for links
   if (action.href) {
     try {
       const best = await pickVisibleOrFirst(page.locator(`a[href="${action.href}"]`));
@@ -1133,28 +990,36 @@ async function resolveElement(page, action) {
   return null;
 }
 
+// AJAX fallback inside page context
 async function executeAjaxFallback(page, ajax) {
   try {
     await page.evaluate(async (req) => {
       let bodyData = undefined;
       if (req.body_base64 && req.method !== 'GET' && req.method !== 'HEAD') {
-        try { bodyData = atob(req.body_base64); } catch { bodyData = req.body_base64; }
+        try {
+          bodyData = atob(req.body_base64);
+        } catch {
+          bodyData = req.body_base64;
+        }
       }
       try {
-        const res = await window.fetch(req.url, {
+        const response = await window.fetch(req.url, {
           method: req.method || 'POST',
           headers: req.headers || {},
           body: bodyData
         });
-        return { ok: res.ok, status: res.status };
+        return { ok: response.ok, status: response.status };
       } catch (e) {
         return { ok: false, error: e.message };
       }
     }, ajax);
     await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
-  } catch (err) {}
+  } catch (err) {
+    console.warn('[Runner] AJAX fallback error:', err.message);
+  }
 }
 
+// DOM Serializer strictly preserving inputs, buttons, selects, forms and data-* attributes
 async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap = new Map(), fontMap = new Map()) {
   const imagesList = imageMap ? Array.from(imageMap.entries()) : [];
   const cssList = cssMap ? Array.from(cssMap.entries()) : [];
@@ -1477,6 +1342,7 @@ async function serializeRenderedPage(page, baseUrl, imageMap = new Map(), cssMap
   }, { base: baseUrl, images: imagesList, cssItems: cssList, fontItems: fontsList });
 }
 
+// Check for common binary/download MIME types
 
 async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
   if (!html) return html;
@@ -1506,11 +1372,11 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
   const candidateUrls = Array.from(urlsToFetch).filter((u) => {
     if (ignoredExtRegex.test(u)) return false;
     return imageExtRegex.test(u) || imageLikeRegex.test(u);
-  });
+  }).slice(0, 25);
 
   if (candidateUrls.length > 0) {
     console.log(`[Sweeper] 🧹 Found ${candidateUrls.length} remaining images to fetch directly via Node.js...`);
-    const CONCURRENCY = 10;
+    const CONCURRENCY = 8;
     for (let i = 0; i < candidateUrls.length; i += CONCURRENCY) {
       const batch = candidateUrls.slice(i, i + CONCURRENCY);
       await Promise.all(
@@ -1522,7 +1388,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 'Referer': baseUrl,
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
               },
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(6000)
             });
             if (res.ok) {
               const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -1530,7 +1396,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 return;
               }
               const cl = parseInt(res.headers.get('content-length') || '0', 10);
-              if (cl > 4 * 1024 * 1024) return;
+              if (cl > 1.5 * 1024 * 1024) return;
 
               let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
               if (mime.includes('octet-stream')) {
@@ -1541,7 +1407,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 else mime = 'image/jpeg';
               }
               const buf = Buffer.from(await res.arrayBuffer());
-              if (buf.length > 0 && buf.length <= 4 * 1024 * 1024) {
+              if (buf.length > 0 && buf.length <= 1.5 * 1024 * 1024) {
                 const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
                 imageMap.set(imgUrl, dataUrl);
                 imageMap.set(imgUrl.split('?')[0], dataUrl);
@@ -1587,12 +1453,17 @@ function isBinaryMime(mime) {
   return (
     m.includes('application/zip') ||
     m.includes('application/octet-stream') ||
+    m.includes('application/x-zip') ||
     m.includes('application/pdf') ||
+    m.includes('application/x-tar') ||
+    m.includes('application/gzip') ||
     m.includes('audio/') ||
-    m.includes('video/')
+    m.includes('video/') ||
+    m.includes('image/')
   );
 }
 
+// Validate and sanitize storageState for Playwright
 function sanitizeStorageState(raw) {
   const sanitized = { cookies: [], origins: [] };
   if (Array.isArray(raw.cookies)) {
@@ -1608,19 +1479,47 @@ function sanitizeStorageState(raw) {
   return sanitized;
 }
 
-function writeErrorArtifacts(workDir, requestId, errorMessage) {
+// Error recovery artifacts so GitHub Action pipeline NEVER fails
+function writeErrorArtifacts(workDir, requestId, errorMessage, requestedUrl = '') {
   fs.mkdirSync(workDir, { recursive: true });
-  const errorHtml = `<!DOCTYPE html><html lang="fa" dir="rtl"><body style="background:#0f172a;color:#f8fafc;padding:30px;"><div style="background:#1e293b;padding:20px;border-radius:10px;border:1px solid #ef4444;"><h2>خطا در پردازش</h2><pre style="direction:ltr;">${errorMessage}</pre></div></body></html>`;
+  const errorHtml = `<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>خطا در دریافت صفحه</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 40px; margin: 0; }
+    .card { background: #1e293b; border-radius: 12px; padding: 30px; max-width: 700px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #ef4444; }
+    h1 { color: #ef4444; margin-top: 0; font-size: 24px; }
+    p { line-height: 1.6; color: #cbd5e1; }
+    pre { background: #0b1120; padding: 15px; border-radius: 8px; color: #fca5a5; overflow-x: auto; direction: ltr; text-align: left; }
+    .meta { font-size: 13px; color: #94a3b8; border-top: 1px solid #334155; padding-top: 15px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>خطا در پردازش درخواست در رانر گیت‌هاب</h1>
+    <p>متاسفانه رانر Playwright در پردازش این آدرس یا اجرای اکشن‌ها با خطا مواجه شد:</p>
+    <pre>${escapeHtml(errorMessage)}</pre>
+    <div class="meta">
+      <strong>شناسه درخواست:</strong> ${escapeHtml(requestId)}<br>
+      <strong>آدرس درخواستی:</strong> <span dir="ltr">${escapeHtml(requestedUrl)}</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
   fs.writeFileSync(path.join(workDir, 'index.html'), errorHtml, 'utf8');
   fs.writeFileSync(path.join(workDir, 'storage_state.json'), JSON.stringify({ cookies: [], origins: [] }, null, 2), 'utf8');
+
   const meta = {
     request_id: requestId,
     status: 'error',
     response_type: 'page',
-    requested_url: '',
-    final_url: '',
+    requested_url: requestedUrl,
+    final_url: requestedUrl,
     http_status: 500,
-    title: 'Daemon Processing Error',
+    title: 'Error Processing Request',
     actions_executed: 0,
     download_filename: '',
     file_size: Buffer.byteLength(errorHtml),
@@ -1628,6 +1527,16 @@ function writeErrorArtifacts(workDir, requestId, errorMessage) {
     error_message: errorMessage
   };
   fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 export { autoJanitorCleanupReleases, autoScrollPage, setupAdBlocker };
@@ -1644,7 +1553,7 @@ function isDirectRun() {
 
 if (isDirectRun()) {
   main().catch((err) => {
-    console.error('[Daemon Fatal Error]', err);
+    console.error('[Fatal Error]', err);
     process.exit(1);
   });
 }

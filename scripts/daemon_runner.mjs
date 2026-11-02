@@ -621,6 +621,9 @@ async function processRequest(browser, requestData, requestId, workDir) {
     const imageMap = new Map();
     const cssMap = new Map();
     const fontMap = new Map();
+    let totalImageBytes = 0;
+    const MAX_TOTAL_IMAGE_BYTES = 16 * 1024 * 1024; // 16 MB max for entire page image cache
+    const MAX_SINGLE_IMAGE_BYTES = 1.5 * 1024 * 1024; // 1.5 MB max per image
 
     page.on('response', async (res) => {
       try {
@@ -632,9 +635,9 @@ async function processRequest(browser, requestData, requestId, workDir) {
           /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(url) ||
           /\.(png|jpe?g|webp|avif|gif|svg|bmp)(\?.*)?$/i.test(reqUrl);
 
-        if (isImg) {
+        if (isImg && totalImageBytes < MAX_TOTAL_IMAGE_BYTES) {
           const buffer = await res.body();
-          if (buffer && buffer.length > 0 && buffer.length <= 25 * 1024 * 1024) {
+          if (buffer && buffer.length > 0 && buffer.length <= MAX_SINGLE_IMAGE_BYTES) {
             let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
             if (!mime || mime.includes('octet-stream')) {
               if (url.includes('.png') || reqUrl.includes('.png')) mime = 'image/png';
@@ -648,6 +651,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
             imageMap.set(reqUrl, dataUrl);
             imageMap.set(url.split('?')[0], dataUrl);
             imageMap.set(reqUrl.split('?')[0], dataUrl);
+            totalImageBytes += buffer.length;
           }
         } else if (ct.includes('text/css') || url.endsWith('.css') || url.includes('.css?')) {
           const text = await res.text();
@@ -805,8 +809,20 @@ async function processRequest(browser, requestData, requestId, workDir) {
           } else if (act.type === 'check') {
             if (el) await el.setChecked(!!act.checked);
           } else if (act.type === 'press') {
-            if (el) await el.press(act.key || 'Enter');
-            else await page.keyboard.press(act.key || 'Enter');
+            if (el) {
+              await el.press(act.key || 'Enter');
+              if (act.key === 'Enter') {
+                await el.evaluate((node) => {
+                  const form = node.closest('form');
+                  if (form) {
+                    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                    else form.submit();
+                  }
+                }).catch(() => {});
+              }
+            } else {
+              await page.keyboard.press(act.key || 'Enter');
+            }
             await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
           } else if (act.type === 'wait') {
             await page.waitForTimeout(act.wait_after_ms || 1000);
@@ -956,11 +972,11 @@ async function packageAndRelease(requestId, workDir) {
     writeErrorArtifacts(workDir, requestId, 'Empty work directory produced');
   }
 
-  // Fast zipping of work directory (cross-platform)
+  // High-efficiency zipping of work directory (Optimal compression)
   if (process.platform === 'win32') {
-    execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Fastest, $false)"`, { stdio: 'ignore' });
+    execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $false)"`, { stdio: 'ignore' });
   } else {
-    execSync(`cd "${workDir}" && zip -q -1 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+    execSync(`cd "${workDir}" && zip -q -6 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
   }
 
   // Mandatory AES-256-GCM encryption of payload.zip using effective key
@@ -1506,11 +1522,11 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
   const candidateUrls = Array.from(urlsToFetch).filter((u) => {
     if (ignoredExtRegex.test(u)) return false;
     return imageExtRegex.test(u) || imageLikeRegex.test(u);
-  });
+  }).slice(0, 25);
 
   if (candidateUrls.length > 0) {
     console.log(`[Sweeper] 🧹 Found ${candidateUrls.length} remaining images to fetch directly via Node.js...`);
-    const CONCURRENCY = 10;
+    const CONCURRENCY = 8;
     for (let i = 0; i < candidateUrls.length; i += CONCURRENCY) {
       const batch = candidateUrls.slice(i, i + CONCURRENCY);
       await Promise.all(
@@ -1522,7 +1538,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 'Referer': baseUrl,
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
               },
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(6000)
             });
             if (res.ok) {
               const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -1530,7 +1546,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 return;
               }
               const cl = parseInt(res.headers.get('content-length') || '0', 10);
-              if (cl > 4 * 1024 * 1024) return;
+              if (cl > 1.5 * 1024 * 1024) return;
 
               let mime = ct.startsWith('image/') ? ct.split(';')[0].trim() : 'image/jpeg';
               if (mime.includes('octet-stream')) {
@@ -1541,7 +1557,7 @@ async function sweepAndInlineRemainingImages(html, baseUrl, imageMap) {
                 else mime = 'image/jpeg';
               }
               const buf = Buffer.from(await res.arrayBuffer());
-              if (buf.length > 0 && buf.length <= 4 * 1024 * 1024) {
+              if (buf.length > 0 && buf.length <= 1.5 * 1024 * 1024) {
                 const dataUrl = `data:${mime};base64,${buf.toString('base64')}`;
                 imageMap.set(imgUrl, dataUrl);
                 imageMap.set(imgUrl.split('?')[0], dataUrl);

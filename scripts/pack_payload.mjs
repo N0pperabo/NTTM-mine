@@ -22,12 +22,12 @@ fs.readdirSync(cwd).filter(f => f.startsWith('payload.zip.part')).forEach(f => f
 const manifestPath = path.join(cwd, 'manifest.json');
 if (fs.existsSync(manifestPath)) fs.unlinkSync(manifestPath);
 
-// 2. High-speed zipping of work/ directory (cross-platform)
-console.log('[Packer] Archiving work/ directory with fast compression...');
+// 2. High-speed zipping of work/ directory (Optimal compression)
+console.log('[Packer] Archiving work/ directory with optimal compression...');
 if (process.platform === 'win32') {
-  execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Fastest, $false)"`, { stdio: 'ignore' });
+  execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $false)"`, { stdio: 'ignore' });
 } else {
-  execSync(`cd "${workDir}" && zip -q -1 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+  execSync(`cd "${workDir}" && zip -q -6 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
 }
 
 // 3. Mandatory AES-256-GCM encryption of payload.zip using effective key
