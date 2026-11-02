@@ -1852,7 +1852,20 @@ def generate_shell_html() -> str:
 
                 // In Batch Mode:
                 if (isBatch) {
-                  if (isInput || isTextarea) return;
+                  if (isInput || isTextarea) {
+                    flashElement(target);
+                    const info = getElementInfo(target);
+                    window.parent.shellApp.queueAction({
+                      type: 'click',
+                      selector: info.selector,
+                      xpath: info.xpath,
+                      text_hint: info.textHint,
+                      x: info.x,
+                      y: info.y
+                    });
+                    // Allow natural cursor focus into the field so the user can type
+                    return;
+                  }
 
                   if (tag === 'input' && ['checkbox', 'radio'].includes(target.type)) {
                     setTimeout(() => {
@@ -1965,7 +1978,77 @@ def generate_shell_html() -> str:
                 }
 
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
-                if (!isBatch) return;
+                if (!isBatch) {
+                  // Direct Mode: Smart search & Enter submission on standalone inputs without native forms
+                  if (e.key === 'Enter') {
+                    const target = e.target;
+                    if (target && (target.tagName.toLowerCase() === 'input' || target.tagName.toLowerCase() === 'textarea')) {
+                      const form = target.closest('form');
+                      const queryVal = (target.value || '').trim();
+                      if (!queryVal) return;
+
+                      // If inside a traditional HTML form with a server action, allow natural submit
+                      if (form && form.getAttribute('action') && !form.getAttribute('action').startsWith('javascript:')) {
+                        return;
+                      }
+
+                      e.preventDefault();
+                      e.stopPropagation();
+                      flashElement(target);
+
+                      const activeUrl = curUrl || window.location.href;
+
+                      // High-speed direct search routing for major platforms
+                      if (activeUrl.includes('reddit.com')) {
+                        window.parent.shellApp.navigate('https://www.reddit.com/search/?q=' + encodeURIComponent(queryVal));
+                        return false;
+                      }
+                      if (activeUrl.includes('youtube.com')) {
+                        window.parent.shellApp.navigate('https://www.youtube.com/results?search_query=' + encodeURIComponent(queryVal));
+                        return false;
+                      }
+                      if (activeUrl.includes('google.com')) {
+                        window.parent.shellApp.navigate('https://www.google.com/search?q=' + encodeURIComponent(queryVal));
+                        return false;
+                      }
+
+                      // Generic SPA fallback: synthesize Fill + Enter replay action
+                      const info = getElementInfo(target);
+                      const directActions = [
+                        {
+                          type: 'fill',
+                          selector: info.selector,
+                          xpath: info.xpath,
+                          value: queryVal,
+                          name: target.name || target.id || '',
+                          placeholder: target.placeholder || '',
+                          text_hint: info.textHint,
+                          x: info.x,
+                          y: info.y
+                        },
+                        {
+                          type: 'press',
+                          key: 'Enter',
+                          selector: info.selector,
+                          xpath: info.xpath,
+                          x: info.x,
+                          y: info.y
+                        }
+                      ];
+
+                      const delay = window.parent.shellApp.isCustomDelayActive ? parseInt(document.getElementById('delay-val')?.value || '5', 10) : 0;
+                      const scroll = window.parent.shellApp.isCustomScrollActive ? parseInt(document.getElementById('scroll-val')?.value || '3', 10) : 0;
+                      const tab = window.parent.shellApp.getActiveTab();
+
+                      window.parent.shellApp.showLoading('Submitting action to runner...');
+                      if (window.pywebview && window.pywebview.api) {
+                        window.pywebview.api.run_batch_actions(activeUrl, directActions, delay, tab ? tab.id : '', scroll);
+                      }
+                      return false;
+                    }
+                  }
+                  return;
+                }
 
                 if (e.key === 'Enter') {
                   const target = e.target;

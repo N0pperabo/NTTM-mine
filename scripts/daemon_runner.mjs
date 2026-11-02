@@ -750,10 +750,44 @@ async function processRequest(browser, requestData, requestId, workDir) {
             await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
             await page.waitForTimeout(1000);
           } else if (act.type === 'click') {
-            if (el) await el.click({ timeout: 5000 });
-            else if (act.href) await page.goto(act.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-            else if (act.x !== undefined && act.y !== undefined) await page.mouse.click(act.x, act.y);
-            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+            let clicked = false;
+            if (el) {
+              try {
+                await el.click({ timeout: 3500 });
+                clicked = true;
+              } catch (err1) {
+                console.warn(`[Daemon] Normal click failed (${err1.message.slice(0, 80)}), trying force click...`);
+              }
+
+              if (!clicked) {
+                try {
+                  await el.click({ force: true, timeout: 2000 });
+                  clicked = true;
+                } catch (err2) {
+                  console.warn(`[Daemon] Force click failed, trying DOM dispatchEvent...`);
+                }
+              }
+
+              if (!clicked) {
+                try {
+                  await el.dispatchEvent('click');
+                  clicked = true;
+                } catch (err3) {}
+              }
+            }
+
+            if (!clicked && act.href) {
+              await page.goto(act.href, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+              clicked = true;
+            }
+
+            if (!clicked && act.x !== undefined && act.y !== undefined) {
+              await page.mouse.click(act.x, act.y).catch(() => {});
+              clicked = true;
+            }
+
+            await page.waitForTimeout(1000);
+            await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
           } else if (act.type === 'submit') {
             if (el) {
               await el.evaluate((f) => {
@@ -818,16 +852,16 @@ async function processRequest(browser, requestData, requestId, workDir) {
     finalUrl = page.url() || target_url;
     pageTitle = await page.title().catch(() => '');
 
-    // Optional auto-scroll for lazy-loaded assets
+    // Optional auto-scroll for lazy-loaded assets (suppressed in replay mode unless explicitly requested)
+    const isReplayMode = mode === 'replay';
     const rawAutoScroll = auto_scroll ?? requestData.auto_scroll;
     const rawScrollSteps = scroll_steps ?? requestData.scroll_steps;
-    const shouldAutoScroll = Boolean(
+    const hasExplicitScroll = (typeof rawScrollSteps === 'number' && rawScrollSteps > 0) || (typeof rawScrollSteps === 'string' && parseInt(rawScrollSteps, 10) > 0);
+    const shouldAutoScroll = (!isReplayMode && Boolean(
       rawAutoScroll === true ||
       rawAutoScroll === 'true' ||
-      (typeof rawAutoScroll === 'number' && rawAutoScroll > 0) ||
-      (typeof rawScrollSteps === 'number' && rawScrollSteps > 0) ||
-      (typeof rawScrollSteps === 'string' && parseInt(rawScrollSteps, 10) > 0)
-    ) && rawAutoScroll !== false && rawAutoScroll !== 'false' && rawAutoScroll !== 0 && rawAutoScroll !== '0';
+      hasExplicitScroll
+    ) && rawAutoScroll !== false && rawAutoScroll !== 'false' && rawAutoScroll !== 0 && rawAutoScroll !== '0') || (isReplayMode && hasExplicitScroll);
 
     const delaySec = parseInt(custom_delay_seconds || 0, 10);
     if (shouldAutoScroll) {
@@ -1003,36 +1037,99 @@ async function packageAndRelease(requestId, workDir) {
 }
 
 async function resolveElement(page, action) {
+  async function pickVisibleOrFirst(loc) {
+    try {
+      const count = await loc.count();
+      if (count === 0) return null;
+      if (count === 1) return loc.first();
+      for (let i = 0; i < count; i++) {
+        const item = loc.nth(i);
+        if (await item.isVisible().catch(() => false)) {
+          return item;
+        }
+      }
+      return loc.first();
+    } catch {
+      return null;
+    }
+  }
+
+  // 1. Specific Selector
   if (action.selector) {
     try {
-      const loc = page.locator(action.selector).first();
-      if ((await loc.count()) > 0) return loc;
+      const best = await pickVisibleOrFirst(page.locator(action.selector));
+      if (best) return best;
     } catch {}
   }
+
+  // 2. High-priority specialized selectors for YouTube Like / Interaction elements
+  if (action.selector && (action.selector.includes('like') || action.selector.includes('ytSpecButtonShape'))) {
+    const ytLikeSelectors = [
+      'ytd-watch-metadata like-button-view-model button',
+      'segmented-like-dislike-button-view-model like-button-view-model button',
+      'like-button-view-model button',
+      '#top-level-buttons-computed like-button-view-model button',
+      'button[aria-label*="like" i]',
+      'button[aria-label*="بپسندید" i]'
+    ];
+    for (const s of ytLikeSelectors) {
+      try {
+        const best = await pickVisibleOrFirst(page.locator(s));
+        if (best) return best;
+      } catch {}
+    }
+  }
+
+  // 3. High-priority specialized selectors for Reddit Search and UI
+  if (action.selector && (action.selector.includes('search') || action.name === 'q' || action.placeholder?.includes('Search'))) {
+    const redditSearchSelectors = [
+      'reddit-search-large input',
+      'faceplate-search-input input',
+      'input[name="q"]',
+      'input[type="search"]',
+      'input[placeholder*="Search" i]',
+      '#search-input'
+    ];
+    for (const s of redditSearchSelectors) {
+      try {
+        const best = await pickVisibleOrFirst(page.locator(s));
+        if (best) return best;
+      } catch {}
+    }
+  }
+
+  // 4. Specific XPath
   if (action.xpath) {
     try {
-      const loc = page.locator('xpath=' + action.xpath).first();
-      if ((await loc.count()) > 0) return loc;
+      const best = await pickVisibleOrFirst(page.locator('xpath=' + action.xpath));
+      if (best) return best;
     } catch {}
   }
+
+  // 5. Text hint
   if (action.text_hint) {
     try {
-      const loc = page.getByText(action.text_hint, { exact: false }).first();
-      if ((await loc.count()) > 0) return loc;
+      const best = await pickVisibleOrFirst(page.getByText(action.text_hint, { exact: false }));
+      if (best) return best;
     } catch {}
   }
+
+  // 6. Placeholder
   if (action.placeholder) {
     try {
-      const loc = page.getByPlaceholder(action.placeholder, { exact: false }).first();
-      if ((await loc.count()) > 0) return loc;
+      const best = await pickVisibleOrFirst(page.getByPlaceholder(action.placeholder, { exact: false }));
+      if (best) return best;
     } catch {}
   }
+
+  // 7. Href
   if (action.href) {
     try {
-      const loc = page.locator(`a[href="${action.href}"]`).first();
-      if ((await loc.count()) > 0) return loc;
+      const best = await pickVisibleOrFirst(page.locator(`a[href="${action.href}"]`));
+      if (best) return best;
     } catch {}
   }
+
   return null;
 }
 
