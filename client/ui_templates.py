@@ -7,9 +7,12 @@ and the OLED-black start page with the halftone dot backdrop.
 from typing import Any, Optional
 
 
-def generate_shell_html() -> str:
-    """Generates pure OLED black UI shell with white buttons and complete onPageLoaded handler."""
-    return r"""<!DOCTYPE html>
+def generate_shell_html(config: Optional[Any] = None) -> str:
+    """Generates pure OLED black UI shell with white buttons, onboarding guide walkthrough, and complete onPageLoaded handler."""
+    show_onboarding = not bool(getattr(config, "onboarding_completed", False)) if config else False
+    show_onboarding_js = "true" if show_onboarding else "false"
+
+    shell_template = r"""<!DOCTYPE html>
 <html lang="en" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -705,6 +708,185 @@ def generate_shell_html() -> str:
     .storage-del-btn:hover {
       background: rgba(239, 68, 68, 0.15);
     }
+
+    /* Onboarding Full-Screen Walkthrough */
+    .onboarding-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.96);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 99999;
+      overflow-y: auto;
+      padding: 36px 16px;
+      direction: rtl;
+    }
+    .onboarding-overlay.active {
+      display: flex;
+    }
+    .onboarding-card {
+      background: #0c0c0c;
+      border: 1px solid #282828;
+      border-radius: 12px;
+      width: 860px;
+      max-width: 95vw;
+      padding: 36px 32px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95);
+      margin: auto 0;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .onboarding-header {
+      border-bottom: 1px solid #262626;
+      padding-bottom: 20px;
+    }
+    .onboarding-header h1 {
+      font-size: 21px;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .onboarding-header p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+    .onboarding-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .onboarding-section {
+      background: #121212;
+      border: 1px solid #202020;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .onboarding-section h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .onboarding-step-num {
+      background: #ffffff;
+      color: #000000;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .onboarding-section p {
+      font-size: 13px;
+      color: #cccccc;
+      line-height: 1.85;
+      margin-bottom: 8px;
+    }
+    .onboarding-section p:last-child {
+      margin-bottom: 0;
+    }
+    .onboarding-code {
+      display: inline-block;
+      background: #1a1a1a;
+      border: 1px solid #333333;
+      color: #58a6ff;
+      padding: 1px 8px;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 12.5px;
+      direction: ltr;
+    }
+    .onboarding-code-block {
+      background: #080808;
+      border: 1px solid #262626;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: ui-monospace, monospace;
+      font-size: 12.5px;
+      color: #58a6ff;
+      direction: ltr;
+      text-align: left;
+      margin: 8px 0;
+      overflow-x: auto;
+    }
+    .onboarding-alert-danger {
+      background: #170d0d;
+      border: 1px solid #552222;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .onboarding-alert-danger h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f85149;
+      margin-bottom: 10px;
+    }
+    .onboarding-alert-danger p {
+      font-size: 13px;
+      color: #fca5a5;
+      line-height: 1.85;
+      margin-bottom: 8px;
+    }
+    .onboarding-alert-danger p:last-child {
+      margin-bottom: 0;
+    }
+    .onboarding-footer {
+      border-top: 1px solid #262626;
+      padding-top: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .onboarding-confirm-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .onboarding-confirm-input {
+      flex: 1;
+      min-width: 240px;
+      background: #000000;
+      border: 1px solid #333333;
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #ffffff;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .onboarding-confirm-input:focus {
+      border-color: #ffffff;
+    }
+    .onboarding-confirm-btn {
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 24px;
+      font-size: 13.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .onboarding-confirm-btn:disabled {
+      background: #222222;
+      color: #555555;
+      cursor: not-allowed;
+      border: 1px solid #333333;
+    }
+    .onboarding-confirm-btn:not(:disabled):hover {
+      background: #e5e5e5;
+    }
   </style>
 </head>
 <body>
@@ -844,9 +1026,12 @@ def generate_shell_html() -> str:
         <label>End-to-end Encryption Key (optional):</label>
         <input type="password" id="cfg-enc" placeholder="Packet encryption key (optional)" />
       </div>
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">Cancel</button>
-        <button class="btn-modal-save" onclick="window.shellApp.saveSettings()">Save Settings</button>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" class="btn-modal-cancel" style="border-color: #555555;" onclick="window.shellApp.openOnboardingGuide(false)">راهنمای راه‌اندازی و آموزش</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-modal-cancel" onclick="window.shellApp.closeSettings()">Cancel</button>
+          <button class="btn-modal-save" onclick="window.shellApp.saveSettings()">Save Settings</button>
+        </div>
       </div>
     </div>
   </div>
@@ -869,6 +1054,108 @@ def generate_shell_html() -> str:
       <div class="modal-actions" style="justify-content: space-between; align-items: center; margin-top: 16px;">
         <button class="btn-modal-cancel" style="color: #ef4444; border-color: #552222;" id="btn-storage-clear" onclick="window.shellApp.clearCurrentStorage()">Clear History</button>
         <button class="btn-modal-save" onclick="window.shellApp.closeStorageModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-Time Onboarding & Comprehensive Guide Overlay -->
+  <div class="onboarding-overlay" id="onboarding-overlay">
+    <div class="onboarding-card">
+      <div class="onboarding-header">
+        <h1>راهنمای راه‌اندازی و استفاده از مرورگر اختصاصی NTTM</h1>
+        <p>لطفاً این راهنمای قدم به قدم را با دقت بخوانید تا نحوه اتصال به گیت‌هاب، ارسال ایمن درخواست‌ها و امکانات پیشرفته مرورگر را به طور کامل متوجه شوید.</p>
+      </div>
+
+      <div class="onboarding-sections">
+        <!-- Step 1: Forking -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۱</span> فورک کردن مخزن در گیت‌هاب (Fork)</h2>
+          <p>اولین گام برای راه‌اندازی، ایجاد یک نسخه اختصاصی از مخزن پروژه در حساب گیت‌هاب خودتان است. در صفحه مخزن پروژه در گیت‌هاب روی دکمه Fork کلیک کنید تا یک کپی از تمامی فایل‌ها و اسکریپت‌های رانر داخل اکانت اختصاصی شما قرار بگیرد.</p>
+          <p>نکته مهم دسترسی رانرها: پس از فورک، در صفحه مخزن خود وارد تب Settings شوید. از منوی سمت چپ به مسیر Actions و سپس General بروید. در بخش Workflow permissions گزینه Read and write permissions را انتخاب کرده و دکمه Save را بزنید تا رانرها مجوز پردازش درخواست‌ها و ایجاد ریلیزها را داشته باشند.</p>
+        </div>
+
+        <!-- Step 2: Target Repository -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۲</span> تنظیم نام مخزن مقصد (Target Repository)</h2>
+          <p>مرورگر کلاینت باید بداند درخواست‌ها را به کدام مخزن ارسال کند. در نوار بالای همین مرورگر روی دکمه تنظیمات (Settings) کلیک کنید. در کادر دوم پنجره تنظیمات، نام مخزن خود را دقیقاً با فرمت <span class="onboarding-code">نام‌کاربری/نام‌مخزن</span> وارد کنید.</p>
+          <p>مثال: اگر نام کاربری گیت‌هاب شما ali باشد و نام ریپوی فورک‌شده را NTTM گذاشته باشید، باید دقیقاً بنویسید: <span class="onboarding-code">ali/NTTM</span></p>
+        </div>
+
+        <!-- Step 3: GitHub PAT -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۳</span> دریافت و ثبت توکن دسترسی گیت‌هاب (Personal Access Token)</h2>
+          <p>کلاینت برای اینکه بتواند بسته‌های درخواست شما را به مخزن بفرستد و رانرها را فراخوانی کند، به یک توکن دسترسی نیاز دارد. برای ساخت آن در حساب گیت‌هاب به مسیر زیر بروید:</p>
+          <div class="onboarding-code-block">Settings > Developer Settings > Personal access tokens > Tokens (classic) > Generate new token (classic)</div>
+          <p>در فرم ساخت توکن، حتماً دو دسترسی الزامی زیر را تیک بزنید:</p>
+          <p>- دسترسی <span class="onboarding-code">repo</span> (دسترسی کامل به مخازن)</p>
+          <p>- دسترسی <span class="onboarding-code">workflow</span> (دسترسی به فراخوانی و اجرای اکشن‌ها)</p>
+          <p>پس از ساخت، توکن نمایش‌داده‌شده (که با <span class="onboarding-code">ghp_</span> شروع می‌شود) را کپی کرده و در فیلد اول پنجره تنظیمات کلاینت قرار دهید.</p>
+        </div>
+
+        <!-- Step 4: Encryption Key & Public Repo -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۴</span> کلید رمزنگاری سرتاسری (AES-256-GCM) و الزام آن در مخازن عمومی</h2>
+          <p>مخازن عمومی (Public) در گیت‌هاب دارای سهمیه نامحدود و کاملاً رایگان برای GitHub Actions هستند و محدودیت ماهانه ۲۰۰۰ دقیقه مخازن خصوصی را ندارند. اما از آنجا که مخزن عمومی است، هر شخصی در اینترنت می‌تواند فایل‌های درون آن را ببیند. به همین دلیل سیستم رمزنگاری نظامی سرتاسری AES-256-GCM در برنامه تعبیه شده است.</p>
+          <p>نحوه تنظیم: یک رمز عبور قوی و دلخواه برای خود در نظر بگیرید:</p>
+          <p>الف) در گیت‌هاب: در مخزن خود به مسیر Settings > Secrets and variables > Actions بروید. روی New repository secret کلیک کنید. نام سکرت را دقیقاً <span class="onboarding-code">ENCRYPTION_KEY</span> بگذارید و مقدار آن را رمز انتخابی‌تان قرار داده و ذخیره کنید.</p>
+          <p>ب) در کلاینت: وارد پنجره تنظیمات شوید و در کادر کلید رمزنگاری، دقیقاً همان رمز را وارد و ذخیره کنید.</p>
+          <p>با این کار، تمامی درخواست‌ها، آدرس‌های وب، کلمات جستجو، کوکی‌ها، صفحات وب رندرشده و فایل‌های دانلودی قبل از خروج از سیستم شما به صورت دودویی قفل می‌شوند و هیچ شخص سومی توانایی دیدن یا رمزگشایی آن‌ها را نخواهد داشت.</p>
+        </div>
+
+        <!-- Step 5: Sessions and Cookies -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۵</span> مدیریت سشن‌ها، لاگین و کوکی‌ها</h2>
+          <p>تمام کوکی‌های حساب‌های کاربری شما و اطلاعات حافظه محلی سایت‌ها به صورت یکپارچه در مسیر زیر در کامپیوتر ذخیره می‌شوند:</p>
+          <div class="onboarding-code-block">~/.gh_offline_browser/session_state.json</div>
+          <p>وقتی در سایتی وارد حسابی می‌شوید، رانر سشن را نگه داشته و به کلاینت تحویل می‌دهد؛ در نتیجه در مراجعات بعدی لاگین باقی می‌مانید. برای انتقال کوکی‌های مرورگر اصلی خود (مثل گوگل، یوتیوب، ردیت و دیپ‌سیک)، می‌توانید با افزونه‌های استخراج کوکی (فرمت Netscape)، کوکی‌ها را استخراج کرده و به کلاینت منتقل کنید.</p>
+        </div>
+
+        <!-- Step 6: Direct vs Batch Mode -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۶</span> تفاوت حالت مستقیم (Direct) و حالت دسته‌ای (Batch)</h2>
+          <p>حالت مستقیم: برای وب‌گردی معمول، خواندن مقالات، جستجو و باز کردن لینک‌ها. با هر کلیک یا ارسال فرم، درخواست بلافاصله ارسال شده و صفحه جدید برمی‌گردد.</p>
+          <p>حالت دسته‌ای: مخصوص وب‌اپلیکیشن‌های تک‌صفحه‌ای (SPA)، صفحات ورود چندمرحله‌ای و منوهای بازشونده. در این حالت می‌توانید چند کلیک و تایپ مختلف را در صف ثبت کرده و با فشردن یک دکمه، کل زنجیره را به رانر بفرستید تا مانند یک کاربر واقعی پشت سر هم اجرا شوند.</p>
+        </div>
+
+        <!-- Step 7: Daemon Runner vs Normal Runner -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۷</span> رانر دیمون (Daemon / Ultra Fast) در برابر رانر عادی</h2>
+          <p>رانر عادی: برای هر درخواستی که می‌فرستید، گیت‌هاب یک ماشین لینوکسی را از صفر راه‌اندازی و پکیج‌ها را نصب می‌کند که حدود ۳۰ تا ۴۵ ثانیه طول می‌کشد.</p>
+          <p>رانر دیمون: با کلیک روی دکمه رانر زنده، یک ورکر فعال در حافظه رم سرور گیت‌هاب آماده به خدمت می‌ماند و زمان لود صفحات به ۲ الی ۵ ثانیه کاهش می‌یابد. اگر ۳۰ دقیقه درخواستی ارسال نکنید، رانر برای حفظ دقایق رایگان خاموش می‌شود و در وب‌گردی طولانی نیز به طور خودکار تا ۵.۵ ساعت زنجیره را زنده نگه می‌دارد.</p>
+        </div>
+
+        <!-- Step 8: Delay & Scroll Buttons -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۸</span> کاربرد دکمه تاخیر (Delay) و دکمه اسکرول (Scroll)</h2>
+          <p>دکمه تاخیر: برای وب‌سایت‌های سنگین یا دارای لودینگ‌های تاخیری کاربرد دارد تا رانر پس از باز کردن آدرس، چند ثانیه منتظر بماند تا انیمیشن‌ها و محتوا لود شوند و سپس صفحه را ثبت کند.</p>
+          <p>دکمه اسکرول: برای صفحاتی که محتوا را صرفاً با پایین رفتن صفحه بارگذاری می‌کنند (Lazy Loading) کاربرد دارد تا قبل از بسته‌بندی، صفحه را به پایین اسکرول کرده و تمام تصاویر و متن‌ها بارگذاری شوند.</p>
+        </div>
+
+        <!-- Step 9: Scrolling Shorts / Reels -->
+        <div class="onboarding-section">
+          <h2><span class="onboarding-step-num">۹</span> اسکرول ویدیوهای یوتیوب شورتس، ریلز و فیدهای عمودی</h2>
+          <p>در پلتفرم‌های پخش ویدیوی عمودی مانند یوتیوب شورتس و ریلز اینستاگرام، مرورگر دارای دکمه شورتس بعدی است. با فشرده شدن این قابلیت، سیگنال اسکرول عمودی مستقیماً به رانر فرستاده شده و ویدیوی بعدی همراه با فریم و استیت جدید استخراج و نمایش داده می‌شود.</p>
+        </div>
+
+        <!-- Step 10: Disclaimer & Risk Notice -->
+        <div class="onboarding-alert-danger">
+          <h2>سلب مسئولیت و شرایط استفاده (بسیار مهم)</h2>
+          <p>سازنده و توسعه‌دهنده این نرم‌افزار هیچ‌گونه مسئولیتی در قبال نحوه استفاده شما، ترافیک ارسالی، نقض قوانین احتمالی سرویس‌دهنده‌ها یا مسدود شدن حساب‌های کاربری ندارد و کلیه عواقب و مسئولیت استفاده تماماً بر عهده شخص کاربر است.</p>
+          <p>استفاده از سرورهای GitHub Actions برای مقاصد وب‌گردی ممکن است با قوانین استفاده منصفانه (Acceptable Use Policy) گیت‌هاب مغایرت داشته باشد و احتمال محدود شدن یا مسدودیت حساب گیت‌هاب شما وجود دارد. اکیداً توصیه می‌شود برای این منظور از یک اکانت گیت‌هاب ثانویه استفاده کنید.</p>
+        </div>
+      </div>
+
+      <div class="onboarding-footer">
+        <div id="onboarding-confirm-footer" style="display: flex; flex-direction: column; gap: 12px;">
+          <p style="font-size: 13.5px; color: #ffffff; font-weight: 700;">برای تایید مطالعه تمامی بندها و ورود به برنامه، کلمه «تایید» را در کادر زیر بنویسید:</p>
+          <div class="onboarding-confirm-box">
+            <input type="text" class="onboarding-confirm-input" id="onboarding-confirm-input" placeholder="کلمه تایید را اینجا بنویسید..." autocomplete="off" />
+            <button type="button" class="onboarding-confirm-btn" id="onboarding-confirm-btn" disabled onclick="window.shellApp.submitOnboarding()">تایید و شروع استفاده</button>
+          </div>
+        </div>
+        <div id="onboarding-manual-close" style="display: none; justify-content: flex-end;">
+          <button type="button" class="onboarding-confirm-btn" onclick="window.shellApp.closeOnboardingGuide()">بستن راهنما</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1651,6 +1938,67 @@ def generate_shell_html() -> str:
         }
       },
 
+      openOnboardingGuide: function(isFirstTime) {
+        const overlay = document.getElementById('onboarding-overlay');
+        if (!overlay) return;
+        overlay.classList.add('active');
+        const confirmBox = document.getElementById('onboarding-confirm-footer');
+        const manualCloseBox = document.getElementById('onboarding-manual-close');
+        if (isFirstTime) {
+          if (confirmBox) confirmBox.style.display = 'flex';
+          if (manualCloseBox) manualCloseBox.style.display = 'none';
+        } else {
+          if (confirmBox) confirmBox.style.display = 'none';
+          if (manualCloseBox) manualCloseBox.style.display = 'flex';
+        }
+      },
+
+      closeOnboardingGuide: function() {
+        const overlay = document.getElementById('onboarding-overlay');
+        if (overlay) overlay.classList.remove('active');
+      },
+
+      submitOnboarding: async function() {
+        const input = document.getElementById('onboarding-confirm-input');
+        const btn = document.getElementById('onboarding-confirm-btn');
+        if (!input || !btn || btn.disabled) return;
+        if (input.value.trim() !== 'تایید') return;
+
+        btn.disabled = true;
+        btn.textContent = 'در حال ذخیره...';
+        try {
+          if (window.pywebview && window.pywebview.api) {
+            await window.pywebview.api.complete_onboarding();
+          }
+          const overlay = document.getElementById('onboarding-overlay');
+          if (overlay) overlay.classList.remove('active');
+          this.showToast('راهنمای راه‌اندازی با موفقیت تایید شد.', false);
+        } catch (err) {
+          console.error('Error completing onboarding:', err);
+          const overlay = document.getElementById('onboarding-overlay');
+          if (overlay) overlay.classList.remove('active');
+        }
+      },
+
+      initOnboarding: function(showImmediately) {
+        const input = document.getElementById('onboarding-confirm-input');
+        const btn = document.getElementById('onboarding-confirm-btn');
+        if (input && btn) {
+          input.addEventListener('input', () => {
+            const val = input.value.trim();
+            btn.disabled = (val !== 'تایید');
+          });
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !btn.disabled) {
+              this.submitOnboarding();
+            }
+          });
+        }
+        if (showImmediately) {
+          this.openOnboardingGuide(true);
+        }
+      },
+
       clearCurrentStorage: function() {
         if (this._currentStorageTab === 'history') {
           if (confirm('Clear the entire browsing history?')) {
@@ -2140,11 +2488,15 @@ def generate_shell_html() -> str:
       }
     };
 
-    window.addEventListener('DOMContentLoaded', () => window.shellApp.init());
+    window.addEventListener('DOMContentLoaded', () => {
+      window.shellApp.init();
+      window.shellApp.initOnboarding(__SHOW_ONBOARDING_PLACEHOLDER__);
+    });
   </script>
 </body>
 </html>
 """
+    return shell_template.replace("__SHOW_ONBOARDING_PLACEHOLDER__", show_onboarding_js)
 
 
 def _dot_backdrop() -> tuple[str, str]:

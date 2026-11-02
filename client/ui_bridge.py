@@ -181,6 +181,19 @@ class WebviewApiBridge:
             logger.error(f"Save config error: {e}")
             return {"success": False, "error": str(e)}
 
+    def complete_onboarding(self) -> Dict[str, Any]:
+        """Marks the first-time onboarding walkthrough as completed."""
+        try:
+            self._ui.config.onboarding_completed = True
+            self._ui.config.save()
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Complete onboarding error: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_onboarding_status(self) -> Dict[str, Any]:
+        return {"completed": bool(getattr(self._ui.config, "onboarding_completed", False))}
+
     # ---------------- SQLite Storage DB (History & Bookmarks) ----------------
 
     def get_history(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:

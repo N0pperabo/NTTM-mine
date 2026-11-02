@@ -109,10 +109,6 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
 
         if path in ("/logo.svg", "/assets/logo.svg"):
             logo_file = Path(__file__).parent / "assets" / "logo.svg"
-            if not logo_file.exists():
-                desktop_logo = Path.home() / "Desktop" / "N0pperabo_logo_transparent.svg"
-                if desktop_logo.exists():
-                    logo_file = desktop_logo
             if logo_file.exists():
                 self.send_response(200)
                 self.send_header("Content-Type", "image/svg+xml")

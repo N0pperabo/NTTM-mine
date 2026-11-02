@@ -429,7 +429,7 @@ class OfflineBrowserUI:
     # ---------------- HTML UI Templates ----------------
     def _generate_shell_html(self) -> str:
         """Generates pure OLED black UI shell with white buttons and complete onPageLoaded handler."""
-        return generate_shell_html()
+        return generate_shell_html(self.config)
 
     def _generate_start_page_html(self) -> str:
         """Generates the fixed scroll-free home screen with NTTM branding, the inverted halftone dot backdrop, and clean dark UI."""

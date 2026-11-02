@@ -32,6 +32,7 @@ class BrowserConfig:
     timeout_seconds: int = 240
     downloads_dir: str = ""
     encryption_key: str = ""
+    onboarding_completed: bool = False
 
     def __post_init__(self):
         if not self.downloads_dir:
@@ -77,6 +78,7 @@ class BrowserConfig:
                 timeout_seconds=data.get("timeout_seconds", 240),
                 downloads_dir=data.get("downloads_dir", ""),
                 encryption_key=data.get("encryption_key", ""),
+                onboarding_completed=bool(data.get("onboarding_completed", False)),
             )
         except Exception as e:
             logger.warning(f"Failed to read config file: {e}. Returning default config.")
