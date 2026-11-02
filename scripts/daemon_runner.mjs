@@ -499,7 +499,7 @@ async function processRequest(browser, requestData, requestId, workDir) {
     scroll_steps = 0
   } = requestData;
 
-  const context = await browser.newContext({
+  const contextOptions = {
     viewport: {
       width: viewport.width || 1920,
       height: viewport.height || 1080
@@ -515,12 +515,19 @@ async function processRequest(browser, requestData, requestId, workDir) {
       ...custom_headers
     },
     acceptDownloads: true
-  });
+  };
+
+  if (storage_state && (storage_state.cookies?.length || storage_state.origins?.length)) {
+    contextOptions.storageState = sanitizeStorageState(storage_state);
+  }
+
+  const context = await browser.newContext(contextOptions);
 
   if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
-    const validCookies = storage_state.cookies.filter(c => c && c.name && c.value && (c.domain || c.url));
-    if (validCookies.length > 0) {
-      await context.addCookies(validCookies).catch(() => {});
+    for (const c of storage_state.cookies) {
+      if (c && c.name && c.value && (c.domain || c.url)) {
+        await context.addCookies([c]).catch(() => {});
+      }
     }
   }
     // Comprehensive Anti-Bot Stealth Masking

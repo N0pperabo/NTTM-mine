@@ -355,6 +355,14 @@ async function main() {
     }
 
     const context = await browser.newContext(contextOptions);
+
+    if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
+      for (const c of storage_state.cookies) {
+        if (c && c.name && c.value && (c.domain || c.url)) {
+          await context.addCookies([c]).catch(() => {});
+        }
+      }
+    }
     // Comprehensive Anti-Bot Stealth Masking
     await context.addInitScript(() => {
       try {
