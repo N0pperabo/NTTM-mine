@@ -1,11 +1,14 @@
 {
-  "name": "github-offline-browser",
+  "name": "nttm-offline-browser",
   "version": "1.0.0",
-  "description": "GitHub-Based Covert Channel Offline Browser & Action Replayer",
+  "description": "N0PPERABO (NTTM) - GitHub-Based Covert Channel Offline Browser & Action Replayer",
   "type": "module",
   "scripts": {
-    "runner": "node scripts/remote_runner.mjs"
+    "runner": "node scripts/remote_runner.mjs",
+    "daemon": "node scripts/daemon_runner.mjs"
   },
+  "author": "N0pperabo",
+  "license": "GPL-3.0-or-later",
   "dependencies": {
     "playwright": "^1.43.0",
     "single-file-cli": "^1.1.50"
