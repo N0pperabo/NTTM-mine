@@ -163,16 +163,33 @@ class _Bundle:
 
 
 def _pick_document(bundle, final_url):
-    docs = [
-        e for e in bundle.entries
-        if e["resource"] == "document" or e["mime"].startswith("text/html")
-    ]
+    docs = [e for e in bundle.entries if e["resource"] == "document"]
+    if not docs:
+        docs = [e for e in bundle.entries if e["mime"].startswith("text/html")]
     if not docs:
         return None
-    wanted_host = urlsplit(final_url).netloc.lower() if final_url else ""
-    pool = [e for e in docs if urlsplit(e["url"]).netloc.lower() == wanted_host] if wanted_host else docs
-    ok = [e for e in pool if 200 <= e["status"] < 300]
-    return (ok or pool)[-1]
+    fu = urlsplit(final_url) if final_url else None
+
+    def score(e):
+        u = urlsplit(e["url"])
+        s = 0
+        if fu:
+            if u.netloc.lower() == (fu.netloc or "").lower():
+                s += 8
+            p_doc = (u.path or "/").rstrip("/")
+            p_fin = (fu.path or "/").rstrip("/")
+            if p_doc == p_fin:
+                s += 24
+            elif p_fin and p_doc.startswith(p_fin + "/"):
+                s += 8
+        if 200 <= e["status"] < 300:
+            s += 4
+        if e["mime"].startswith("text/html"):
+            s += 2
+        s += min(len(e["body"]) // 4096, 24)
+        return s
+
+    return max(docs, key=score)
 
 
 def rebuild_from_har(har_zip, extracted_dir, request_id, final_url="", replay_url_base=None):
