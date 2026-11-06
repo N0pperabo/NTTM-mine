@@ -4,8 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decryptBytes, decryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
 
-// DOM snapshot off by user decision: full network traffic ships as work/traffic.har.zip via recordHar.
-const SNAPSHOT_ENABLED = false;
+// DOM snapshot on: the client renders index.html; full traffic also ships as work/traffic.har.zip.
+const SNAPSHOT_ENABLED = true;
 
 const BLOCKED_AD_DOMAINS = [
   'googlesyndication.com',
@@ -876,7 +876,7 @@ async function main() {
         download_filename: '',
         file_size: SNAPSHOT_ENABLED ? fs.statSync(path.join(workDir, 'index.html')).size : 0,
         mime_type: SNAPSHOT_ENABLED ? 'text/html' : 'application/zip',
-        har_filename: SNAPSHOT_ENABLED ? '' : 'traffic.har.zip',
+        har_filename: 'traffic.har.zip',
         error_message: ''
       };
       fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');

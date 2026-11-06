@@ -389,35 +389,47 @@ class GitHubTransport:
                         meta=meta,
                     )
 
-            # Full traffic capture (HAR zip) shipped by the runner
-            har_file = extracted_dir / "traffic.har.zip"
-            if har_file.exists():
-                dest_dir = Path(self.config.downloads_dir)
-                dest_dir.mkdir(parents=True, exist_ok=True)
-                dest_file = dest_dir / f"har-{request_id}.zip"
-                shutil.copy2(har_file, dest_file)
-                update_status(f"بسته کامل ترافیک (HAR) در {dest_file} ذخیره شد.")
-                return FetchResult(
-                    success=True,
-                    response_type="har",
-                    har_file_path=str(dest_file),
-                    meta=meta,
-                )
-
-            # Web page response
             index_html = extracted_dir / "index.html"
             if not index_html.exists():
+                # HAR-only payload: no rendered page, hand over the raw capture
+                har_file = extracted_dir / "traffic.har.zip"
+                if har_file.exists():
+                    dest_dir = Path(self.config.downloads_dir)
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest_file = dest_dir / f"har-{request_id}.zip"
+                    shutil.copy2(har_file, dest_file)
+                    update_status(f"بسته کامل ترافیک (HAR) در {dest_file} ذخیره شد.")
+                    return FetchResult(
+                        success=True,
+                        response_type="har",
+                        har_file_path=str(dest_file),
+                        meta=meta,
+                    )
                 return FetchResult(
                     success=False,
                     error_message="فایل index.html در بسته دریافتی موجود نیست.",
                     meta=meta,
                 )
 
-            update_status("صفحه وب با موفقیت آماده شد.")
+            # Rendered page: keep the full-traffic HAR (if present) as a side artifact
+            har_file = extracted_dir / "traffic.har.zip"
+            har_saved_path = None
+            if har_file.exists():
+                try:
+                    dest_dir = Path(self.config.downloads_dir)
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    dest_file = dest_dir / f"har-{request_id}.zip"
+                    shutil.copy2(har_file, dest_file)
+                    har_saved_path = str(dest_file)
+                except Exception as e:
+                    logger.warning(f"Failed to store HAR side artifact: {e}")
+
+            update_status("صفحه وب با موفقیت آماده شد." + (f" (HAR کامل: {har_saved_path})" if har_saved_path else ""))
             return FetchResult(
                 success=True,
                 response_type="page",
                 index_html_path=str(index_html),
+                har_file_path=har_saved_path,
                 meta=meta,
             )
 
