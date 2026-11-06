@@ -24,7 +24,7 @@ _SHIM_TEMPLATE = """(function(){
     try { return !!(window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode); } catch(e) { return false; }
   }
   var __nttmBlocked = { click:1, auxclick:1, dblclick:1, mousedown:1, mouseup:1, pointerdown:1, pointerup:1, touchstart:1, touchend:1, contextmenu:1, keydown:1, keyup:1, keypress:1, submit:1, input:1, change:1 };
-  var __nttmNoDefault = { click:1, auxclick:1, dblclick:1, contextmenu:1, keydown:1, keypress:1, submit:1 };
+  var __nttmNoDefault = { click:1, auxclick:1, dblclick:1, contextmenu:1, submit:1 };
   var __nttmAdd = EventTarget.prototype.addEventListener;
   EventTarget.prototype.addEventListener = function(type, fn, opts){
     try {
@@ -32,7 +32,6 @@ _SHIM_TEMPLATE = """(function(){
         var __fn = fn;
         var wrapped = function(e){
           if (__nttmBatch()) {
-            e.stopImmediatePropagation();
             if (__nttmNoDefault[String(e.type)] && e.cancelable !== false) e.preventDefault();
             return undefined;
           }
