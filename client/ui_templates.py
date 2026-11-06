@@ -2212,10 +2212,12 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
                       y: info.y
                     });
                     // Allow natural cursor focus into the field so the user can type
+                    e.stopImmediatePropagation();
                     return;
                   }
 
                   if (tag === 'input' && ['checkbox', 'radio'].includes(target.type)) {
+                    e.stopImmediatePropagation();
                     setTimeout(() => {
                       const info = getElementInfo(target);
                       window.parent.shellApp.queueAction({
@@ -2230,7 +2232,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
                   }
 
                   e.preventDefault();
-                  e.stopPropagation();
+                  e.stopImmediatePropagation();
 
                   const info = getElementInfo(target);
                   flashElement(target);
@@ -2335,7 +2337,31 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation();
                     flashElement(target);
+
+                    // Batch Mode: typing is ALWAYS recorded, never navigated
+                    if (isBatch) {
+                      const bInfo = getElementInfo(target);
+                      window.parent.shellApp.queueAction({
+                        type: 'fill',
+                        selector: bInfo.selector,
+                        xpath: bInfo.xpath,
+                        value: queryVal,
+                        name: target.name || target.id || '',
+                        x: bInfo.x,
+                        y: bInfo.y
+                      });
+                      window.parent.shellApp.queueAction({
+                        type: 'press',
+                        key: 'Enter',
+                        selector: bInfo.selector,
+                        xpath: bInfo.xpath,
+                        x: bInfo.x,
+                        y: bInfo.y
+                      });
+                      return false;
+                    }
 
                     const activeUrl = curUrl || window.location.href;
 
@@ -2437,6 +2463,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
               document.addEventListener('submit', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
+                e.stopImmediatePropagation();
 
                 const form = e.target;
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;

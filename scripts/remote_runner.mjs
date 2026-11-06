@@ -4,8 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decryptBytes, decryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
 
-// DOM snapshot on: the client renders index.html; full traffic also ships as work/traffic.har.zip.
-const SNAPSHOT_ENABLED = true;
+// DOM snapshot off: the client rebuilds the page from traffic.har.zip; flip to true to also ship the rendered snapshot (~doubles payload size).
+const SNAPSHOT_ENABLED = false;
 
 const BLOCKED_AD_DOMAINS = [
   'googlesyndication.com',

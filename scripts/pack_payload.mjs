@@ -27,7 +27,7 @@ console.log('[Packer] Archiving work/ directory with optimal compression...');
 if (process.platform === 'win32') {
   execSync(`powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::CreateFromDirectory('${workDir.replace(/'/g, "''")}', '${payloadZip.replace(/'/g, "''")}', [System.IO.Compression.CompressionLevel]::Optimal, $false)"`, { stdio: 'ignore' });
 } else {
-  execSync(`cd "${workDir}" && zip -q -6 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
+  execSync(`cd "${workDir}" && zip -q -9 -r "${payloadZip}" . && cd "${cwd}"`, { stdio: 'ignore' });
 }
 
 // 3. Mandatory AES-256-GCM encryption of payload.zip using effective key
