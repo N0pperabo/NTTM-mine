@@ -407,7 +407,16 @@ class GitHubTransport:
             replay_path = None
             if har_file.exists():
                 try:
-                    replay_path = rebuild_from_har(har_file, extracted_dir, request_id, str(meta.get("final_url") or ""))
+                    replay_url_base = None
+                    try:
+                        rel = (Path(extracted_dir) / "replay").relative_to(Path(self.cache_base).resolve())
+                        replay_url_base = f"/cache/{rel.as_posix()}/"
+                    except Exception:
+                        replay_url_base = None
+                    replay_path = rebuild_from_har(
+                        har_file, extracted_dir, request_id,
+                        str(meta.get("final_url") or ""), replay_url_base,
+                    )
                 except Exception as e:
                     logger.warning(f"HAR rebuild failed, falling back: {e}")
 

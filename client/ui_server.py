@@ -136,19 +136,38 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             file_path = self.cache_dir / rel_path
             if file_path.exists() and file_path.is_file():
                 self.send_response(200)
-                # Guess mime type
-                mime = "text/html; charset=utf-8" if file_path.suffix == ".html" else "application/octet-stream"
-                if file_path.suffix == ".css":
-                    mime = "text/css; charset=utf-8"
-                elif file_path.suffix in (".js", ".mjs"):
+                mime = {
+                    ".css": "text/css; charset=utf-8",
+                    ".mjs": "application/javascript",
+                    ".json": "application/json",
+                    ".woff2": "font/woff2",
+                    ".woff": "font/woff",
+                    ".ttf": "font/ttf",
+                    ".otf": "font/otf",
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".gif": "image/gif",
+                    ".svg": "image/svg+xml",
+                    ".webp": "image/webp",
+                    ".avif": "image/avif",
+                    ".ico": "image/x-icon",
+                    ".mp3": "audio/mpeg",
+                    ".m4a": "audio/mp4",
+                    ".mp4": "video/mp4",
+                    ".webm": "video/webm",
+                }.get(file_path.suffix.lower())
+                if file_path.suffix.lower() == ".html":
+                    mime = "text/html; charset=utf-8"
+                elif file_path.suffix.lower() in (".js", ".mjs"):
                     mime = "application/javascript"
-                elif file_path.suffix in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"):
-                    mime = f"image/{file_path.suffix.lstrip('.')}"
+                if not mime:
+                    mime = "application/octet-stream"
                 self.send_header("Content-Type", mime)
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header(
                     "Content-Security-Policy",
-                    "default-src 'self' 'unsafe-inline' data: blob: http://127.0.0.1:*; img-src 'self' data: blob: http://127.0.0.1:*; style-src 'self' 'unsafe-inline' data:; font-src 'self' data:; connect-src 'none'; form-action 'none';",
+                    "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' data:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; form-action 'none';",
                 )
                 self.end_headers()
                 with open(file_path, "rb") as f:
