@@ -28,6 +28,19 @@ logging.basicConfig(
     format="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# Persist client-side errors (render/rebuild failures) to a file so they are diagnosable
+try:
+    _log_file = Path.home() / ".gh_offline_browser" / "client.log"
+    _log_file.parent.mkdir(parents=True, exist_ok=True)
+    _fh = logging.FileHandler(_log_file, encoding="utf-8")
+    _fh.setLevel(logging.DEBUG)
+    _fh.setFormatter(logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s"))
+    logging.getLogger().addHandler(_fh)
+    logging.getLogger().setLevel(logging.DEBUG)
+except Exception:
+    pass
+
 logger = logging.getLogger("Main")
 
 

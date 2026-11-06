@@ -99,6 +99,11 @@ async function setupAdBlocker(page, targetUrl) {
         return route.abort();
       }
 
+      // Video/audio streams are useless offline and can bloat the HAR capture enormously
+      if (req.resourceType() === 'media' || /googlevideo\.com|\.m4s($|\?)|\.mp4($|\?)|\.webm($|\?)/i.test(req.url())) {
+        return route.abort();
+      }
+
       return route.continue();
     } catch (err) {
       return route.continue().catch(() => {});

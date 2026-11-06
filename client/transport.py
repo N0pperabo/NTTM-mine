@@ -407,6 +407,9 @@ class GitHubTransport:
             replay_path = None
             if har_file.exists():
                 try:
+                    stray = extracted_dir / "replay"
+                    if stray.exists() and not stray.is_dir():
+                        stray.unlink()
                     replay_url_base = None
                     try:
                         rel = (Path(extracted_dir) / "replay").relative_to(Path(self.cache_base).resolve())
@@ -417,16 +420,17 @@ class GitHubTransport:
                         har_file, extracted_dir, request_id,
                         str(meta.get("final_url") or ""), replay_url_base,
                     )
+                    if replay_path:
+                        logger.info(f"HAR rebuild ok: {replay_path}")
                 except Exception as e:
-                    logger.warning(f"HAR rebuild failed, falling back: {e}")
+                    logger.exception("HAR rebuild failed, falling back")
 
             page_path = replay_path or (index_html if index_html.exists() else None)
             if page_path is None:
                 if har_saved_path:
-                    update_status(f"بسته کامل ترافیک (HAR) در {har_saved_path} ذخیره شد.")
                     return FetchResult(
-                        success=True,
-                        response_type="har",
+                        success=False,
+                        error_message=f"بازسازی صفحه از HAR ناموفق بود و روش اسنپ‌شات غیرفعال است. بسته خام ترافیک اینجا ذخیره شد: {har_saved_path}",
                         har_file_path=har_saved_path,
                         meta=meta,
                     )

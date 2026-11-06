@@ -338,40 +338,44 @@ class OfflineBrowserUI:
 
         # Web page response
         if result.index_html_path:
-            p = Path(result.index_html_path)
-            # URL path under local server: /cache/<request_id>/extracted/index.html
-            rel = p.relative_to(self.transport.cache_base)
-            local_frame_url = f"/cache/{rel.as_posix()}"
-            final_url = result.meta.get("final_url", requested_url)
-            title = result.meta.get("title", final_url)
-
-            # Persist to SQLite Storage Database
             try:
-                self.storage_db.add_history(
-                    url=final_url,
-                    title=title,
-                    local_cache_path=str(p),
-                )
-                self.storage_db.set_page_cache(
-                    url=final_url,
-                    hash=result.meta.get("sha256", result.meta.get("hash", "")),
-                    size=result.meta.get("size", p.stat().st_size if p.exists() else 0),
-                    mime_type="text/html",
-                )
-            except Exception as e:
-                logger.debug(f"Storage DB error for page: {e}")
+                p = Path(result.index_html_path)
+                # URL path under local server: /cache/<request_id>/extracted/index.html
+                rel = p.relative_to(self.transport.cache_base)
+                local_frame_url = f"/cache/{rel.as_posix()}"
+                final_url = result.meta.get("final_url", requested_url)
+                title = result.meta.get("title", final_url)
 
-            # Update history
-            self.current_url = final_url
-            if self.history_index < len(self.history) - 1:
-                self.history = self.history[: self.history_index + 1]
-            self.history.append({"url": final_url, "local_url": local_frame_url, "title": title})
-            self.history_index = len(self.history) - 1
+                # Persist to SQLite Storage Database
+                try:
+                    self.storage_db.add_history(
+                        url=final_url,
+                        title=title,
+                        local_cache_path=str(p),
+                    )
+                    self.storage_db.set_page_cache(
+                        url=final_url,
+                        hash=result.meta.get("sha256", result.meta.get("hash", "")),
+                        size=result.meta.get("size", p.stat().st_size if p.exists() else 0),
+                        mime_type="text/html",
+                    )
+                except Exception as e:
+                    logger.debug(f"Storage DB error for page: {e}")
 
-            # Tell shell to load iframe and update address bar (supporting multi-tab)
-            self._call_js(
-                f"window.shellApp.onPageLoaded('{local_frame_url}', '{final_url}', {json.dumps(title)}, '{tab_id}')"
-            )
+                # Update history
+                self.current_url = final_url
+                if self.history_index < len(self.history) - 1:
+                    self.history = self.history[: self.history_index + 1]
+                self.history.append({"url": final_url, "local_url": local_frame_url, "title": title})
+                self.history_index = len(self.history) - 1
+
+                # Tell shell to load iframe and update address bar (supporting multi-tab)
+                self._call_js(
+                    f"window.shellApp.onPageLoaded('{local_frame_url}', '{final_url}', {json.dumps(title)}, '{tab_id}')"
+                )
+            except Exception:
+                logger.exception("Failed to render rebuilt page")
+                self._notify_ui("خطا در نمایش صفحه بازسازی‌شده؛ جزئیات در client.log", is_error=True)
 
     # ---------------- Helper UI Communicators ----------------
 
