@@ -2178,6 +2178,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
               // --- 1. CLICK Interception ---
               document.addEventListener('click', function(e) {
+                /* __nttmQueue */
                 const target = e.target.closest('a') || e.target.closest('button') || e.target.closest('input[type="submit"]') || e.target.closest('input[type="button"]') || e.target.closest('[role="button"]') || e.target;
                 if (!target) return;
 
@@ -2260,6 +2261,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
               // Middle click mouseup prevent default
               document.addEventListener('auxclick', function(e) {
+                /* __nttmQueue */
                 if (e.button === 1) {
                   const link = e.target.closest('a');
                   if (link && link.getAttribute('href')) {
@@ -2273,6 +2275,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
               // --- 2. INPUT & CHANGE Interception ---
               function handleInput(e) {
+                /* __nttmQueue */
                 const isBatch = window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode;
                 if (!isBatch) return;
 
@@ -2313,6 +2316,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
               // --- 3. KEYDOWN Interception (Enter on forms / Shorts navigation) ---
               let isShortsScrolling = false;
               document.addEventListener('keydown', function(e) {
+                /* __nttmQueue */
                 const curUrl = (window.parent && window.parent.shellApp && window.parent.shellApp.getActiveTab && (window.parent.shellApp.getActiveTab().url || '')) || window.location.href;
                 const isShorts = curUrl.includes('/shorts');
 
@@ -2447,6 +2451,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
               // --- 4. YOUTUBE SHORTS WHEEL SCROLL Interception ---
               window.addEventListener('wheel', function(e) {
+                /* __nttmQueue */
                 const curUrl = (window.parent && window.parent.shellApp && window.parent.shellApp.getActiveTab && (window.parent.shellApp.getActiveTab().url || '')) || window.location.href;
                 const isShorts = curUrl.includes('/shorts');
                 if (!isShorts) return;
@@ -2461,6 +2466,7 @@ def generate_shell_html(config: Optional[Any] = None) -> str:
 
               // --- 5. SUBMIT Interception (Direct & Batch Mode) ---
               document.addEventListener('submit', function(e) {
+                /* __nttmQueue */
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();

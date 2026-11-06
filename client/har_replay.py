@@ -20,6 +20,35 @@ _INVALID = re.compile(r'[<>:"|?*\x00-\x1f]')
 _MAX_MANIFEST_KEYS = 4000
 
 _SHIM_TEMPLATE = """(function(){
+  function __nttmBatch(){
+    try { return !!(window.parent && window.parent.shellApp && window.parent.shellApp.isBatchMode); } catch(e) { return false; }
+  }
+  var __nttmBlocked = { click:1, auxclick:1, dblclick:1, mousedown:1, mouseup:1, pointerdown:1, pointerup:1, touchstart:1, touchend:1, contextmenu:1, keydown:1, keyup:1, keypress:1, submit:1, input:1, change:1 };
+  var __nttmNoDefault = { click:1, auxclick:1, dblclick:1, contextmenu:1, keydown:1, keypress:1, submit:1 };
+  var __nttmAdd = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function(type, fn, opts){
+    try {
+      if (typeof fn === 'function' && __nttmBlocked[String(type)] && String(fn).indexOf('__nttmQueue') === -1) {
+        var __fn = fn;
+        var wrapped = function(e){
+          if (__nttmBatch()) {
+            e.stopImmediatePropagation();
+            if (__nttmNoDefault[String(e.type)] && e.cancelable !== false) e.preventDefault();
+            return undefined;
+          }
+          return __fn.apply(this, arguments);
+        };
+        fn.__nttmWrapped = wrapped;
+        return __nttmAdd.call(this, type, wrapped, opts);
+      }
+    } catch(e) {}
+    return __nttmAdd.call(this, type, fn, opts);
+  };
+  var __nttmRemove = EventTarget.prototype.removeEventListener;
+  EventTarget.prototype.removeEventListener = function(type, fn, opts){
+    try { if (fn && fn.__nttmWrapped) return __nttmRemove.call(this, type, fn.__nttmWrapped, opts); } catch(e) {}
+    return __nttmRemove.call(this, type, fn, opts);
+  };
   var BASE = __BASE__;
   var DOC_HOST = __DOCHOST__;
   var M = __KEYS__;

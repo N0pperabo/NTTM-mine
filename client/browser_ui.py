@@ -178,28 +178,33 @@ class OfflineBrowserUI:
 
         def task():
             self.is_busy = True
-            details = []
-            if delay > 0:
-                details.append(f"{delay}s delay")
-            if scroll_steps > 0:
-                details.append(f"{scroll_steps} scroll steps")
-            msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
-            msg = f"Preparing and sending to GitHub{msg_suffix}"
-            self._set_loading(True, msg)
+            try:
+                details = []
+                if delay > 0:
+                    details.append(f"{delay}s delay")
+                if scroll_steps > 0:
+                    details.append(f"{scroll_steps} scroll steps")
+                msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
+                msg = f"Preparing and sending to GitHub{msg_suffix}"
+                self._set_loading(True, msg)
 
-            def on_status(msg):
-                self._update_status(msg)
+                def on_status(msg):
+                    self._update_status(msg)
 
-            res = self.transport.fetch_page(
-                target_url=target_url,
-                mode="navigate",
-                custom_delay_seconds=delay,
-                custom_scroll_steps=scroll_steps,
-                status_callback=on_status,
-            )
-            self._handle_fetch_result(res, target_url, tab_id=tab_id)
-            self.is_busy = False
-            self._set_loading(False)
+                res = self.transport.fetch_page(
+                    target_url=target_url,
+                    mode="navigate",
+                    custom_delay_seconds=delay,
+                    custom_scroll_steps=scroll_steps,
+                    status_callback=on_status,
+                )
+                self._handle_fetch_result(res, target_url, tab_id=tab_id)
+            except Exception as e:
+                logger.exception("Navigate task failed")
+                self._notify_ui(f"Error: {e}", is_error=True)
+            finally:
+                self.is_busy = False
+                self._set_loading(False)
 
         threading.Thread(target=task, daemon=True).start()
 
@@ -223,30 +228,35 @@ class OfflineBrowserUI:
 
         def task():
             self.is_busy = True
-            details = []
-            if delay > 0:
-                details.append(f"{delay}s delay")
-            if scroll_steps > 0:
-                details.append(f"{scroll_steps} scroll steps")
-            msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
-            msg = f"Sending form data to GitHub{msg_suffix}"
-            self._set_loading(True, msg)
+            try:
+                details = []
+                if delay > 0:
+                    details.append(f"{delay}s delay")
+                if scroll_steps > 0:
+                    details.append(f"{scroll_steps} scroll steps")
+                msg_suffix = f" (with {' and '.join(details)} on the runner)..." if details else "..."
+                msg = f"Sending form data to GitHub{msg_suffix}"
+                self._set_loading(True, msg)
 
-            body_bytes = base64.b64decode(body_base64) if body_base64 else b""
+                body_bytes = base64.b64decode(body_base64) if body_base64 else b""
 
-            res = self.transport.fetch_page(
-                target_url=action_url,
-                mode="form",
-                method=method,
-                content_type=content_type,
-                body_bytes=body_bytes,
-                custom_delay_seconds=delay,
-                custom_scroll_steps=scroll_steps,
-                status_callback=self._update_status,
-            )
-            self._handle_fetch_result(res, action_url, tab_id=tab_id)
-            self.is_busy = False
-            self._set_loading(False)
+                res = self.transport.fetch_page(
+                    target_url=action_url,
+                    mode="form",
+                    method=method,
+                    content_type=content_type,
+                    body_bytes=body_bytes,
+                    custom_delay_seconds=delay,
+                    custom_scroll_steps=scroll_steps,
+                    status_callback=self._update_status,
+                )
+                self._handle_fetch_result(res, action_url, tab_id=tab_id)
+            except Exception as e:
+                logger.exception("Form submit task failed")
+                self._notify_ui(f"Error: {e}", is_error=True)
+            finally:
+                self.is_busy = False
+                self._set_loading(False)
 
         threading.Thread(target=task, daemon=True).start()
 
@@ -269,31 +279,36 @@ class OfflineBrowserUI:
 
         def task():
             self.is_busy = True
-            details = []
-            if delay > 0:
-                details.append(f"{delay}s delay")
-            if scroll_steps > 0:
-                details.append(f"{scroll_steps} scroll steps")
-            msg_suffix = f" (with {' and '.join(details)})..." if details else "..."
-            msg = f"Replaying {len(actions)} actions on the runner{msg_suffix}"
-            self._set_loading(True, msg)
+            try:
+                details = []
+                if delay > 0:
+                    details.append(f"{delay}s delay")
+                if scroll_steps > 0:
+                    details.append(f"{scroll_steps} scroll steps")
+                msg_suffix = f" (with {' and '.join(details)})..." if details else "..."
+                msg = f"Replaying {len(actions)} actions on the runner{msg_suffix}"
+                self._set_loading(True, msg)
 
-            mode = "replay"
-            if not actions and intercepted_ajax and intercepted_ajax.get("captured"):
-                mode = "ajax_fallback"
+                mode = "replay"
+                if not actions and intercepted_ajax and intercepted_ajax.get("captured"):
+                    mode = "ajax_fallback"
 
-            res = self.transport.fetch_page(
-                target_url=target_url or self.current_url,
-                mode=mode,
-                actions=actions,
-                intercepted_ajax=intercepted_ajax,
-                custom_delay_seconds=delay,
-                custom_scroll_steps=scroll_steps,
-                status_callback=self._update_status,
-            )
-            self._handle_fetch_result(res, target_url or self.current_url, tab_id=tab_id)
-            self.is_busy = False
-            self._set_loading(False)
+                res = self.transport.fetch_page(
+                    target_url=target_url or self.current_url,
+                    mode=mode,
+                    actions=actions,
+                    intercepted_ajax=intercepted_ajax,
+                    custom_delay_seconds=delay,
+                    custom_scroll_steps=scroll_steps,
+                    status_callback=self._update_status,
+                )
+                self._handle_fetch_result(res, target_url or self.current_url, tab_id=tab_id)
+            except Exception as e:
+                logger.exception("Replay task failed")
+                self._notify_ui(f"Error: {e}", is_error=True)
+            finally:
+                self.is_busy = False
+                self._set_loading(False)
 
         threading.Thread(target=task, daemon=True).start()
 
