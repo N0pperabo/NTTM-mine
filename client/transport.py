@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import requests
 
 from .config import BrowserConfig
+from .har_replay import rebuild_from_har
 from .session_manager import SessionManager
 from .crypto import (
     encrypt_bytes,
@@ -390,28 +391,6 @@ class GitHubTransport:
                     )
 
             index_html = extracted_dir / "index.html"
-            if not index_html.exists():
-                # HAR-only payload: no rendered page, hand over the raw capture
-                har_file = extracted_dir / "traffic.har.zip"
-                if har_file.exists():
-                    dest_dir = Path(self.config.downloads_dir)
-                    dest_dir.mkdir(parents=True, exist_ok=True)
-                    dest_file = dest_dir / f"har-{request_id}.zip"
-                    shutil.copy2(har_file, dest_file)
-                    update_status(f"بسته کامل ترافیک (HAR) در {dest_file} ذخیره شد.")
-                    return FetchResult(
-                        success=True,
-                        response_type="har",
-                        har_file_path=str(dest_file),
-                        meta=meta,
-                    )
-                return FetchResult(
-                    success=False,
-                    error_message="فایل index.html در بسته دریافتی موجود نیست.",
-                    meta=meta,
-                )
-
-            # Rendered page: keep the full-traffic HAR (if present) as a side artifact
             har_file = extracted_dir / "traffic.har.zip"
             har_saved_path = None
             if har_file.exists():
@@ -424,11 +403,38 @@ class GitHubTransport:
                 except Exception as e:
                     logger.warning(f"Failed to store HAR side artifact: {e}")
 
-            update_status("صفحه وب با موفقیت آماده شد." + (f" (HAR کامل: {har_saved_path})" if har_saved_path else ""))
+            # Primary path: rebuild the page from the full-traffic HAR itself
+            replay_path = None
+            if har_file.exists():
+                try:
+                    replay_path = rebuild_from_har(har_file, extracted_dir, request_id, str(meta.get("final_url") or ""))
+                except Exception as e:
+                    logger.warning(f"HAR rebuild failed, falling back: {e}")
+
+            page_path = replay_path or (index_html if index_html.exists() else None)
+            if page_path is None:
+                if har_saved_path:
+                    update_status(f"بسته کامل ترافیک (HAR) در {har_saved_path} ذخیره شد.")
+                    return FetchResult(
+                        success=True,
+                        response_type="har",
+                        har_file_path=har_saved_path,
+                        meta=meta,
+                    )
+                return FetchResult(
+                    success=False,
+                    error_message="فایل index.html در بسته دریافتی موجود نیست.",
+                    meta=meta,
+                )
+
+            if replay_path:
+                update_status("صفحه از HAR کامل بازسازی شد." + (f" (HAR: {har_saved_path})" if har_saved_path else ""))
+            else:
+                update_status("صفحه وب با موفقیت آماده شد.")
             return FetchResult(
                 success=True,
                 response_type="page",
-                index_html_path=str(index_html),
+                index_html_path=str(page_path),
                 har_file_path=har_saved_path,
                 meta=meta,
             )
