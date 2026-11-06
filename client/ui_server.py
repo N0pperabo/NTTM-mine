@@ -132,9 +132,17 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 return
 
         if path.startswith("/cache/"):
-            rel_path = path[len("/cache/") :]
-            file_path = self.cache_dir / rel_path
-            if file_path.exists() and file_path.is_file():
+            raw_rel = path[len("/cache/") :]
+            rel_path = urllib.parse.unquote(raw_rel)
+            file_path = None
+            for cand in (rel_path, raw_rel):
+                if ".." in cand.replace("\\", "/").split("/"):
+                    continue
+                cand_path = self.cache_dir / cand
+                if cand_path.is_file():
+                    file_path = cand_path
+                    break
+            if file_path is not None:
                 self.send_response(200)
                 mime = {
                     ".css": "text/css; charset=utf-8",

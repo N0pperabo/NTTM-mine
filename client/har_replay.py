@@ -13,7 +13,7 @@ import json
 import re
 import zipfile
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 _REPLAY_ROOT = "replay"
 _INVALID = re.compile(r'[<>:"|?*\x00-\x1f]')
@@ -137,19 +137,30 @@ def _mirror_rel(url):
     for seg in path.split("/"):
         if seg in ("", ".", ".."):
             continue
-        parts.append(_INVALID.sub("_", seg)[:120])
+        try:
+            seg = unquote(seg)
+        except Exception:
+            pass
+        # Non-ASCII names get a stable hash: browser URL normalization can never
+        # disagree with the on-disk filename (percent-encoding/NFC-NFD safe).
+        if not seg.isascii():
+            seg = "u_" + hashlib.md5(seg.encode("utf-8")).hexdigest()[:16]
+        parts.append(_INVALID.sub("_", seg)[:120] or "_")
     if not parts:
         parts = ["index.html"]
     return u.netloc.lower() + "/" + "/".join(parts)
 
 
 def _ext_fix(rel, mime):
-    # Browsers refuse stylesheets/scripts served without a recognizable extension+MIME.
+    # Browsers refuse stylesheets/scripts served without a recognizable extension+MIME,
+    # and documents without .html get octet-stream (downloaded instead of rendered).
     low = rel.lower()
     if mime == "text/css" and not low.endswith(".css"):
         return rel + ".css"
     if "javascript" in mime and not low.endswith((".js", ".mjs")):
         return rel + ".js"
+    if mime == "text/html" and not low.endswith((".html", ".htm")):
+        return rel + ".html"
     return rel
 
 
@@ -266,7 +277,7 @@ def rebuild_from_har(har_zip, extracted_dir, request_id, final_url="", replay_ur
     if doc is None:
         return None
 
-    doc_rel = _mirror_rel(doc["url"])
+    doc_rel = _ext_fix(_mirror_rel(doc["url"]), doc["mime"])
     doc_abs = replay_root / doc_rel
     doc_abs.parent.mkdir(parents=True, exist_ok=True)
 
