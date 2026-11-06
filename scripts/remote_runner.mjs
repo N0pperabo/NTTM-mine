@@ -4,6 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decryptBytes, decryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
 
+// DOM snapshot off by user decision: full network traffic ships as work/traffic.har.zip via recordHar.
+const SNAPSHOT_ENABLED = false;
+
 const BLOCKED_AD_DOMAINS = [
   'googlesyndication.com',
   'doubleclick.net',
@@ -297,6 +300,7 @@ async function main() {
   console.log(`[Runner] Processing request ${requestId} in mode: ${mode}`);
 
   let browser;
+  let context = null;
   let downloadedFile = null;
   let actionsExecuted = 0;
   let finalUrl = target_url;
@@ -354,7 +358,14 @@ async function main() {
       contextOptions.storageState = sanitizeStorageState(storage_state);
     }
 
-    const context = await browser.newContext(contextOptions);
+    // Playwright flushes traffic.har.zip only when the context closes (finally below).
+    contextOptions.recordHar = {
+      path: path.join(workDir, 'traffic.har.zip'),
+      mode: 'full',
+      content: 'attach'
+    };
+
+    context = await browser.newContext(contextOptions);
 
     if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
       for (const c of storage_state.cookies) {
@@ -826,50 +837,50 @@ async function main() {
       'utf8'
     );
 
-    // Save webpage if not a file download
     if (!downloadedFile) {
-      console.log('[Runner] Serializing rendered DOM snapshot...');
-      let serializedHtml = '';
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-          finalUrl = page.url() || target_url;
-          serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
-          break;
-        } catch (evalErr) {
-          if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
-            console.log(`[Runner] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
-            await page.waitForTimeout(3000);
+      if (SNAPSHOT_ENABLED) {
+        let serializedHtml = '';
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
             await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
             finalUrl = page.url() || target_url;
-            pageTitle = await page.title().catch(() => '');
-            continue;
+            serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+            break;
+          } catch (evalErr) {
+            if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
+              console.log(`[Runner] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
+              await page.waitForTimeout(3000);
+              await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+              finalUrl = page.url() || target_url;
+              pageTitle = await page.title().catch(() => '');
+              continue;
+            }
+            throw evalErr;
           }
-          throw evalErr;
         }
+        serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
+        const indexPath = path.join(workDir, 'index.html');
+        fs.writeFileSync(indexPath, serializedHtml, 'utf8');
       }
-      serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
-      const indexPath = path.join(workDir, 'index.html');
-      fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
-      const fileSize = fs.statSync(indexPath).size;
       const meta = {
         request_id: requestId,
         status: 'success',
-        response_type: 'page',
+        response_type: SNAPSHOT_ENABLED ? 'page' : 'har',
         requested_url: target_url,
         final_url: finalUrl,
         http_status: httpStatus,
         title: pageTitle || 'Offline Webpage',
         actions_executed: actionsExecuted,
         download_filename: '',
-        file_size: fileSize,
-        mime_type: 'text/html',
+        file_size: SNAPSHOT_ENABLED ? fs.statSync(path.join(workDir, 'index.html')).size : 0,
+        mime_type: SNAPSHOT_ENABLED ? 'text/html' : 'application/zip',
+        har_filename: SNAPSHOT_ENABLED ? '' : 'traffic.har.zip',
         error_message: ''
       };
       fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
-      console.log(`[Runner] Page captured successfully. Size: ${fileSize} bytes.`);
+      console.log(`[Runner] Capture completed (${meta.response_type}).`);
     } else {
       console.log(`[Runner] File download recorded: ${downloadedFile.filename}`);
       const meta = {
@@ -892,6 +903,9 @@ async function main() {
     console.error('[Runner] Unhandled execution error:', err);
     writeErrorArtifacts(workDir, requestId, err.message, target_url);
   } finally {
+    if (context) {
+      await context.close().catch(() => {});
+    }
     if (browser) {
       await browser.close().catch(() => {});
     }

@@ -6,6 +6,9 @@ import crypto from 'node:crypto';
 import { decryptBytes, encryptBytes, decryptEnvelope, encryptEnvelope, isEncrypted, getEffectiveKey } from './crypto_utils.mjs';
 import { execSync } from 'node:child_process';
 
+// DOM snapshot off by user decision: full network traffic ships as work/traffic.har.zip via recordHar.
+const SNAPSHOT_ENABLED = false;
+
 const BLOCKED_AD_DOMAINS = [
   'googlesyndication.com',
   'doubleclick.net',
@@ -521,6 +524,13 @@ async function processRequest(browser, requestData, requestId, workDir) {
     contextOptions.storageState = sanitizeStorageState(storage_state);
   }
 
+  // Playwright flushes traffic.har.zip only when the context closes (finally below).
+  contextOptions.recordHar = {
+    path: path.join(workDir, 'traffic.har.zip'),
+    mode: 'full',
+    content: 'attach'
+  };
+
   const context = await browser.newContext(contextOptions);
 
   if (storage_state && Array.isArray(storage_state.cookies) && storage_state.cookies.length > 0) {
@@ -904,45 +914,49 @@ async function processRequest(browser, requestData, requestId, workDir) {
     fs.writeFileSync(path.join(workDir, 'storage_state.json'), JSON.stringify(currentStorage, null, 2), 'utf8');
 
     if (!downloadedFile) {
-      let serializedHtml = '';
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-          finalUrl = page.url() || target_url;
-          serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
-          break;
-        } catch (evalErr) {
-          if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
-            console.log(`[Daemon] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
-            await page.waitForTimeout(3000);
+      if (SNAPSHOT_ENABLED) {
+        let serializedHtml = '';
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
             await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-            await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
             finalUrl = page.url() || target_url;
-            pageTitle = await page.title().catch(() => '');
-            continue;
+            serializedHtml = await serializeRenderedPage(page, finalUrl, imageMap, cssMap, fontMap);
+            break;
+          } catch (evalErr) {
+            if ((evalErr.message.includes('Execution context was destroyed') || evalErr.message.includes('navigation')) && attempt < 3) {
+              console.log(`[Daemon] 🔄 Navigation occurred during serialization (attempt ${attempt}). Waiting for new document...`);
+              await page.waitForTimeout(3000);
+              await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+              await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+              finalUrl = page.url() || target_url;
+              pageTitle = await page.title().catch(() => '');
+              continue;
+            }
+            throw evalErr;
           }
-          throw evalErr;
         }
+        serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
+        const indexPath = path.join(workDir, 'index.html');
+        fs.writeFileSync(indexPath, serializedHtml, 'utf8');
       }
-      serializedHtml = await sweepAndInlineRemainingImages(serializedHtml, finalUrl, imageMap);
-      const indexPath = path.join(workDir, 'index.html');
-      fs.writeFileSync(indexPath, serializedHtml, 'utf8');
 
       const meta = {
         request_id: requestId,
         status: 'success',
-        response_type: 'page',
+        response_type: SNAPSHOT_ENABLED ? 'page' : 'har',
         requested_url: target_url,
         final_url: finalUrl,
         http_status: httpStatus,
         title: pageTitle || 'Offline Webpage',
         actions_executed: actionsExecuted,
         download_filename: '',
-        file_size: fs.statSync(indexPath).size,
-        mime_type: 'text/html',
+        file_size: SNAPSHOT_ENABLED ? fs.statSync(path.join(workDir, 'index.html')).size : 0,
+        mime_type: SNAPSHOT_ENABLED ? 'text/html' : 'application/zip',
+        har_filename: SNAPSHOT_ENABLED ? '' : 'traffic.har.zip',
         error_message: ''
       };
       fs.writeFileSync(path.join(workDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+      console.log(`[Daemon] Capture completed (${meta.response_type}).`);
     } else {
       const meta = {
         request_id: requestId,

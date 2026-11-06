@@ -322,6 +322,20 @@ class OfflineBrowserUI:
                 logger.debug(f"Storage DB error for file: {e}")
             return
 
+        if result.response_type == "har":
+            har_path = result.har_file_path or ""
+            msg = f"Full traffic capture (HAR) received: {har_path}"
+            self._notify_ui(msg, is_file=True)
+            try:
+                self.storage_db.add_history(
+                    url=requested_url,
+                    title=f"HAR capture: {Path(har_path).name}",
+                    local_cache_path=har_path,
+                )
+            except Exception as e:
+                logger.debug(f"Storage DB error for HAR: {e}")
+            return
+
         # Web page response
         if result.index_html_path:
             p = Path(result.index_html_path)

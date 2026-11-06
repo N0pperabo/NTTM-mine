@@ -35,9 +35,10 @@ class FetchResult:
     """Represents the outcome of an offline fetch operation."""
 
     success: bool
-    response_type: str = "page"  # "page" or "file"
+    response_type: str = "page"  # "page", "file" or "har"
     index_html_path: Optional[str] = None
     downloaded_file_path: Optional[str] = None
+    har_file_path: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     error_message: str = ""
 
@@ -387,6 +388,21 @@ class GitHubTransport:
                         error_message=f"فایل دانلودی {filename} در بسته دریافتی یافت نشد.",
                         meta=meta,
                     )
+
+            # Full traffic capture (HAR zip) shipped by the runner
+            har_file = extracted_dir / "traffic.har.zip"
+            if har_file.exists():
+                dest_dir = Path(self.config.downloads_dir)
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_file = dest_dir / f"har-{request_id}.zip"
+                shutil.copy2(har_file, dest_file)
+                update_status(f"بسته کامل ترافیک (HAR) در {dest_file} ذخیره شد.")
+                return FetchResult(
+                    success=True,
+                    response_type="har",
+                    har_file_path=str(dest_file),
+                    meta=meta,
+                )
 
             # Web page response
             index_html = extracted_dir / "index.html"
