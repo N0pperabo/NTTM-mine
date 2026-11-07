@@ -65,7 +65,8 @@ _SHIM_TEMPLATE = """(function(){
       else return u;
       var h=abs.hostname;
       try{ if(location.hostname && h===location.hostname) h=DOC_HOST; }catch(e){}
-      var rel=M[h+abs.pathname];
+      var rel=M[h+abs.pathname+(abs.search||'')];
+      if(rel===undefined) rel=M[h+abs.pathname];
       if(rel===undefined) return u;
       return BASE+rel;
     }catch(e){ return u; }
@@ -125,7 +126,7 @@ def _canon(url):
     u = urlsplit(url)
     if u.scheme not in ("http", "https") or not u.netloc:
         return None
-    return u.netloc.lower() + (u.path or "/")
+    return u.netloc.lower() + (u.path or "/") + (("?" + u.query) if u.query else "")
 
 
 def _mirror_rel(url):
@@ -148,7 +149,17 @@ def _mirror_rel(url):
         parts.append(_INVALID.sub("_", seg)[:120] or "_")
     if not parts:
         parts = ["index.html"]
-    return u.netloc.lower() + "/" + "/".join(parts)
+    rel = u.netloc.lower() + "/" + "/".join(parts)
+    if u.query:
+        # Same path with different query strings is a different resource
+        # (load.php?only=styles vs only=scripts, youtubei variants, ...).
+        qh = hashlib.md5(u.query.encode("utf-8")).hexdigest()[:10]
+        stem, dot, ext = rel.rpartition(".")
+        if dot and "/" not in ext and 0 < len(ext) <= 5:
+            rel = f"{stem}__q_{qh}.{ext}"
+        else:
+            rel = f"{rel}__q_{qh}"
+    return rel
 
 
 def _ext_fix(rel, mime):

@@ -113,45 +113,43 @@ async function setupAdBlocker(page, targetUrl) {
 
 async function autoScrollPage(page, delaySec = 0, scrollSteps = 3) {
   try {
-    console.log(`[Daemon] Auto-scrolling page (steps: ${scrollSteps})...`);
-    await page.evaluate(async ({ delay, steps }) => {
-      await new Promise((resolve) => {
-        let totalHeight = 0;
-        const distance = 400;
-        const docElem = document.documentElement;
-        const body = document.body;
+    console.log(`[Daemon] Auto-scrolling page (steps: ${scrollSteps}, delay: ${delaySec}s)...`);
+    if (delaySec > 0) {
+      await page.waitForTimeout(Math.min(delaySec, 20) * 1000);
+    }
+    const steps = Math.max(1, Math.min(parseInt(scrollSteps, 10) || 3, 40));
+    await page.evaluate(() => {
+      try {
+        document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]').forEach((el) => el.setAttribute('loading', 'eager'));
+      } catch (e) {}
+    }).catch(() => {});
 
-        try {
-          document.querySelectorAll('img[loading="lazy"], iframe[loading="lazy"]').forEach((el) => {
-            el.setAttribute('loading', 'eager');
-          });
-        } catch (e) {}
-
-        const targetLimit = Math.min(Math.max(steps, 1) * 800, 3000);
-        const pageHeight = Math.max(docElem.scrollHeight, body ? body.scrollHeight : 0, 800);
-        const maxScroll = Math.min(pageHeight, targetLimit);
-        const totalSteps = Math.max(1, Math.ceil(maxScroll / distance));
-        const stepInterval = delay > 0 ? Math.max(25, Math.floor((delay * 1000) / (totalSteps * 1.5))) : 25;
-
-        const timer = setInterval(() => {
-          window.scrollBy(0, distance);
-          totalHeight += distance;
-
-          window.dispatchEvent(new Event('scroll'));
-          window.dispatchEvent(new Event('resize'));
-
-          if (totalHeight >= maxScroll) {
-            clearInterval(timer);
-            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-            window.dispatchEvent(new Event('scroll'));
-            window.dispatchEvent(new Event('resize'));
-            resolve();
+    for (let i = 0; i < steps; i++) {
+      await page.evaluate(() => {
+        let bestEl = null;
+        let bestGap = 0;
+        for (const el of Array.from(document.querySelectorAll('div, main, section, [role="main"]'))) {
+          const gap = (el.scrollHeight || 0) - (el.clientHeight || 0);
+          if (gap > bestGap && el.clientHeight > 240) {
+            bestGap = gap;
+            bestEl = el;
           }
-        }, stepInterval);
-      });
-    }, { delay: delaySec, steps: scrollSteps });
+        }
+        window.scrollBy(0, Math.max(window.innerHeight * 0.9, 700));
+        if (bestEl && bestGap > 40) bestEl.scrollTop = bestEl.scrollHeight;
+        window.dispatchEvent(new Event('scroll'));
+        window.dispatchEvent(new Event('resize'));
+      }).catch(() => {});
 
-    await page.waitForTimeout(400);
+      await page.mouse.wheel(0, 1200).catch(() => {});
+      await page.waitForTimeout(800);
+      await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+    }
+
+    const finalY = await page.evaluate(() => (document.scrollingElement ? document.scrollingElement.scrollTop : 0)).catch(() => 0);
+    console.log(`[Daemon] Auto-scroll finished (steps: ${steps}, scrollTop: ${finalY}).`);
+
+    await page.waitForTimeout(500);
     await page.evaluate(() => {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       window.dispatchEvent(new Event('scroll'));

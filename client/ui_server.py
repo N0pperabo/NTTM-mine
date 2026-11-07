@@ -40,6 +40,12 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def _safe_write(self, data):
+        try:
+            self.wfile.write(data)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, OSError):
+            pass
+
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -69,12 +75,12 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(resp_bytes)
+            self._safe_write(resp_bytes)
             return
 
         self.send_response(404)
         self.end_headers()
-        self.wfile.write(b"Not Found")
+        self._safe_write(b"Not Found")
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -90,21 +96,21 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.end_headers()
-            self.wfile.write(resp_bytes)
+            self._safe_write(resp_bytes)
             return
 
         if path in ("/", "/index.html", "/shell"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(self.shell_html.encode("utf-8"))
+            self._safe_write(self.shell_html.encode("utf-8"))
             return
 
         if path == "/start":
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(self.start_html.encode("utf-8"))
+            self._safe_write(self.start_html.encode("utf-8"))
             return
 
         if path in ("/logo.svg", "/assets/logo.svg"):
@@ -116,7 +122,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 with open(logo_file, "rb") as f:
-                    self.wfile.write(f.read())
+                    self._safe_write(f.read())
                 return
 
         if path.startswith("/assets/fonts/"):
@@ -128,7 +134,7 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 with open(font_file, "rb") as f:
-                    self.wfile.write(f.read())
+                    self._safe_write(f.read())
                 return
 
         if path.startswith("/cache/"):
@@ -179,12 +185,12 @@ class LocalAssetHandler(SimpleHTTPRequestHandler):
                 )
                 self.end_headers()
                 with open(file_path, "rb") as f:
-                    self.wfile.write(f.read())
+                    self._safe_write(f.read())
                 return
 
         self.send_response(404)
         self.end_headers()
-        self.wfile.write(b"Not Found")
+        self._safe_write(b"Not Found")
 
     def log_message(self, format, *args):
         # Silence standard HTTP logs to avoid clutter
